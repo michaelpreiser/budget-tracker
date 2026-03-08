@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit 2>&1)",
+      "Bash(turso db create budget-tracker 2>&1)",
+      "Bash(npm install @libsql/client && npm uninstall better-sqlite3 @types/better-sqlite3 2>&1)",
+      "Bash(echo \"SELECT COUNT\\(*\\) FROM transactions; SELECT COUNT\\(*\\) FROM users; SELECT COUNT\\(*\\) FROM categories;\" | turso db shell budget-tracker 2>&1)",
+      "Bash(npm run build 2>&1)"
+    ]
+  }
+}
