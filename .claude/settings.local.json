@@ -5,7 +5,8 @@
       "Bash(turso db create budget-tracker 2>&1)",
       "Bash(npm install @libsql/client && npm uninstall better-sqlite3 @types/better-sqlite3 2>&1)",
       "Bash(echo \"SELECT COUNT\\(*\\) FROM transactions; SELECT COUNT\\(*\\) FROM users; SELECT COUNT\\(*\\) FROM categories;\" | turso db shell budget-tracker 2>&1)",
-      "Bash(npm run build 2>&1)"
+      "Bash(npm run build 2>&1)",
+      "Bash(turso db shell budget-tracker \"SELECT id, username, SUBSTR\\(password_hash, 1, 20\\) as hash_prefix FROM users;\" 2>&1)"
     ]
   }
 }
