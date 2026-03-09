@@ -24,8 +24,8 @@ function getClient(): Client {
     throw new Error('TURSO_DATABASE_URL environment variable is not set')
   }
   return createClient({
-    url: process.env.TURSO_DATABASE_URL.trim(),
-    authToken: process.env.TURSO_AUTH_TOKEN?.trim(),
+    url: process.env.TURSO_DATABASE_URL.replace(/\s/g, ''),
+    authToken: process.env.TURSO_AUTH_TOKEN?.replace(/\s/g, ''),
   })
 }
 
