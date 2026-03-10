@@ -289,6 +289,42 @@ export default function TotalPage() {
               </div>
             </div>
 
+            {/* Income by category */}
+            {allIncomeCategories.length > 0 && (
+              <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl">
+                <h2 className="text-slate-200 font-semibold text-base mb-4">Income by Category</h2>
+                <div className="space-y-3">
+                  {Object.entries(incomeByCategory)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([cat, amt]) => {
+                      const pct = totalIncome > 0 ? (amt / totalIncome) * 100 : 0
+                      const isExcluded = excludedFromIncome.includes(cat)
+                      return (
+                        <div key={cat}>
+                          <div className="flex justify-between items-baseline mb-1">
+                            <span className={`text-sm truncate pr-2 ${isExcluded ? 'text-slate-500' : 'text-slate-300'}`}>
+                              {cat}{isExcluded && <span className="text-slate-600 text-xs ml-1">(excluded)</span>}
+                            </span>
+                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
+                              <span className={`text-sm font-medium tabular-nums ${isExcluded ? 'text-slate-500' : 'text-emerald-400'}`}>
+                                ${fmt(amt)}
+                              </span>
+                              <span className="text-slate-600 text-xs tabular-nums">{pct.toFixed(0)}%</span>
+                            </div>
+                          </div>
+                          <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${isExcluded ? 'bg-slate-700' : 'bg-gradient-to-r from-emerald-700 to-emerald-500'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
+
             {/* Category breakdown */}
             {categoryRows.length > 0 && (
               <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl">
