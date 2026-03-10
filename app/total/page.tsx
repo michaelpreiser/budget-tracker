@@ -19,6 +19,8 @@ export default function TotalPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [excludedFromExpenses, setExcludedFromExpenses] = useState<string[]>(['Investing'])
+  const [excludedFromIncome, setExcludedFromIncome] = useState<string[]>([])
+  const [showIncomeExclusionPanel, setShowIncomeExclusionPanel] = useState(false)
 
   // Load excluded categories from localStorage (shared with main page)
   useEffect(() => {
@@ -27,6 +29,15 @@ export default function TotalPage() {
       if (saved) setExcludedFromExpenses(JSON.parse(saved))
     } catch {}
   }, [])
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('excludedFromIncome')
+      if (saved) setExcludedFromIncome(JSON.parse(saved))
+    } catch {}
+  }, [])
+  useEffect(() => {
+    localStorage.setItem('excludedFromIncome', JSON.stringify(excludedFromIncome))
+  }, [excludedFromIncome])
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
@@ -55,12 +66,28 @@ export default function TotalPage() {
       return acc
     }, {} as Record<string, number>)
 
+  const incomeByCategory = transactions
+    .filter((t) => t.type === 'income')
+    .reduce((acc, t) => {
+      acc[t.category] = (acc[t.category] ?? 0) + t.amount
+      return acc
+    }, {} as Record<string, number>)
+
+  const allIncomeCategories = Object.keys(incomeByCategory).sort()
+
   const excludedTotal = excludedFromExpenses.reduce(
     (s, cat) => s + (expenseByCategory[cat] ?? 0), 0
   )
   const adjustedExpenses = totalExpenses - excludedTotal
   const activeExclusions = excludedFromExpenses.filter((cat) => expenseByCategory[cat] > 0)
-  const net = totalIncome - adjustedExpenses
+
+  const excludedIncomeTotal = excludedFromIncome.reduce(
+    (s, cat) => s + (incomeByCategory[cat] ?? 0), 0
+  )
+  const adjustedIncome = totalIncome - excludedIncomeTotal
+  const activeIncomeExclusions = excludedFromIncome.filter((cat) => incomeByCategory[cat] > 0)
+
+  const net = adjustedIncome - adjustedExpenses
   const isProfit = net >= 0
 
   // Monthly breakdown
@@ -76,8 +103,15 @@ export default function TotalPage() {
         .reduce((a, t) => a + t.amount, 0)
       return s + catAmt
     }, 0)
+    const exclIncome = excludedFromIncome.reduce((s, cat) => {
+      const catAmt = monthTx
+        .filter((t) => t.type === 'income' && t.category === cat)
+        .reduce((a, t) => a + t.amount, 0)
+      return s + catAmt
+    }, 0)
+    const adjIncome = income - exclIncome
     const adjExpenses = expenses - excl
-    return { name, income, expenses: adjExpenses, net: income - adjExpenses, hasData: monthTx.length > 0 }
+    return { name, income: adjIncome, expenses: adjExpenses, net: adjIncome - adjExpenses, hasData: monthTx.length > 0 }
   })
 
   // Category breakdown sorted by amount
@@ -130,10 +164,55 @@ export default function TotalPage() {
             <div className="grid grid-cols-3 gap-4">
               {/* Income */}
               <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
-                <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">Income</p>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">Income</p>
+                  <button
+                    onClick={() => setShowIncomeExclusionPanel((v) => !v)}
+                    title="Customize excluded income categories"
+                    className={`text-xs px-2 py-0.5 rounded-lg border transition-colors ${
+                      showIncomeExclusionPanel
+                        ? 'border-blue-500/50 text-blue-400 bg-blue-500/10'
+                        : 'border-slate-700 text-slate-500 hover:text-slate-300 hover:border-slate-600'
+                    }`}
+                  >
+                    {showIncomeExclusionPanel ? 'done' : 'edit'}
+                  </button>
+                </div>
                 <p className="text-2xl font-bold tabular-nums leading-none text-emerald-400">
-                  ${fmt(totalIncome)}
+                  ${fmt(adjustedIncome)}
                 </p>
+                {!showIncomeExclusionPanel && activeIncomeExclusions.length > 0 && (
+                  <p className="text-slate-600 text-xs mt-1.5 tabular-nums">
+                    excl. ${fmt(excludedIncomeTotal)} in {activeIncomeExclusions.join(', ')}
+                  </p>
+                )}
+                {showIncomeExclusionPanel && (
+                  <div className="mt-3 pt-3 border-t border-slate-800 space-y-1.5">
+                    <p className="text-slate-500 text-xs mb-2">Exclude from total:</p>
+                    {allIncomeCategories.length === 0 ? (
+                      <p className="text-slate-600 text-xs">No income this year.</p>
+                    ) : (
+                      allIncomeCategories.map((cat) => (
+                        <label key={cat} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={excludedFromIncome.includes(cat)}
+                            onChange={(e) =>
+                              setExcludedFromIncome((prev) =>
+                                e.target.checked ? [...prev, cat] : prev.filter((c) => c !== cat)
+                              )
+                            }
+                            className="accent-blue-500"
+                          />
+                          <span className="text-slate-300 text-xs flex-1">{cat}</span>
+                          <span className="text-slate-500 text-xs tabular-nums">
+                            ${fmt(incomeByCategory[cat])}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Expenses */}
@@ -199,7 +278,7 @@ export default function TotalPage() {
                   <tfoot>
                     <tr className="border-t border-slate-700 bg-slate-800/30">
                       <td className="px-5 py-3 text-slate-300 font-semibold">Total</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-emerald-400 font-semibold">${fmt(totalIncome)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-emerald-400 font-semibold">${fmt(adjustedIncome)}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-red-400 font-semibold">−${fmt(adjustedExpenses)}</td>
                       <td className={`px-5 py-3 text-right tabular-nums font-semibold ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
                         {isProfit ? '+' : '−'}${fmt(Math.abs(net))}
