@@ -77,6 +77,8 @@ export default function Home() {
   const [username, setUsername] = useState('')
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showAccountModal, setShowAccountModal] = useState(false)
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
+  const [adminStats, setAdminStats] = useState<{ userCount: number } | null>(null)
   const [excludedFromExpenses, setExcludedFromExpenses] = useState<string[]>(['Investing'])
   const [showExclusionPanel, setShowExclusionPanel] = useState(false)
   const [excludedFromIncome, setExcludedFromIncome] = useState<string[]>([])
@@ -344,6 +346,19 @@ export default function Home() {
                 >
                   Account Settings
                 </button>
+                {username === 'Michael Preiser' && (
+                  <button
+                    onClick={async () => {
+                      setShowUserMenu(false)
+                      const r = await fetch('/api/admin/stats')
+                      if (r.ok) setAdminStats(await r.json())
+                      setShowAdminPanel(true)
+                    }}
+                    className="w-full text-left px-3 py-2.5 text-sm text-amber-400 hover:bg-slate-700 transition-colors border-t border-slate-700"
+                  >
+                    Admin
+                  </button>
+                )}
                 <button
                   onClick={handleLogout}
                   className="w-full text-left px-3 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors border-t border-slate-700"
@@ -485,7 +500,7 @@ export default function Home() {
         </div>
 
         {/* ── Main two-column layout ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-stretch">
           {/* Left column */}
           <div className="flex flex-col gap-6">
             <InputBar categories={categories} onAdd={addTransaction} />
@@ -531,6 +546,28 @@ export default function Home() {
           onClose={() => setShowAccountModal(false)}
           onUsernameChange={(name) => setUsername(name)}
         />
+      )}
+
+      {showAdminPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-slate-100 font-bold text-base">Admin</h2>
+              <button
+                onClick={() => setShowAdminPanel(false)}
+                className="text-slate-500 hover:text-slate-300 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="bg-slate-800 rounded-xl px-4 py-3">
+              <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">Total Users</p>
+              <p className="text-3xl font-bold tabular-nums text-slate-100">
+                {adminStats ? adminStats.userCount : '—'}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

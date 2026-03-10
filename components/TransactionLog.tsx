@@ -79,7 +79,7 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
   }
 
   return (
-    <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl flex flex-col">
+    <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl flex flex-col h-full">
       <h2 className="text-slate-200 font-semibold text-base mb-4">Transaction Log</h2>
 
       {transactions.length === 0 ? (
@@ -87,7 +87,7 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
           <p className="text-slate-600 text-sm">No transactions for this month.</p>
         </div>
       ) : (
-        <div className="overflow-y-auto max-h-[520px] space-y-1.5 pr-1">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
           {transactions.map((t) =>
             editingId === t.id ? (
               /* ── Edit row ── */
