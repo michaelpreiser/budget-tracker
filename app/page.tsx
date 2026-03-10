@@ -505,7 +505,7 @@ export default function Home() {
         </div>
 
         {/* ── Main two-column layout ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left column */}
           <div className="flex flex-col gap-6">
             <InputBar categories={categories} onAdd={addTransaction} />
