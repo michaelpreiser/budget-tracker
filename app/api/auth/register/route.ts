@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import db, { seedCategories } from '@/lib/db'
+import db, { seedCategories, seedCategoryRules } from '@/lib/db'
 import { createSession } from '@/lib/session'
 
 export async function POST(request: NextRequest) {
@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     await seedCategories(db, userId)
+    await seedCategoryRules(db, userId)
     await createSession(userId)
     return NextResponse.json({ username: username.trim() }, { status: 201 })
   } catch (err) {

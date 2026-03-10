@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Category, Transaction } from '@/types'
+import { extractKeyword } from '@/lib/categorization'
 
 interface Props {
   transactions: Transaction[]
@@ -70,6 +71,16 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
     })
     setSaving(false)
     setEditingId(null)
+  }
+
+  function saveRule(description: string, category: string) {
+    const keyword = extractKeyword(description)
+    if (!keyword) return
+    fetch('/api/category-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword, category }),
+    }).catch(() => {})
   }
 
   async function handleDelete(id: number) {
@@ -207,7 +218,7 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
                 {/* Category — inline dropdown, saves on change */}
                 <select
                   value={t.category}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     onEdit(t.id, {
                       amount: t.amount,
                       type: t.type,
@@ -215,7 +226,8 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
                       notes: t.notes,
                       date: t.date,
                     })
-                  }
+                    if (t.notes) saveRule(t.notes, e.target.value)
+                  }}
                   className="flex-1 min-w-0 bg-transparent text-slate-300 text-sm focus:outline-none cursor-pointer hover:text-slate-100 transition-colors appearance-none truncate"
                 >
                   {categories.map((c) => (

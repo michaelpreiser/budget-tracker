@@ -9,6 +9,7 @@ import BudgetTargets from '@/components/BudgetTargets'
 import CategoryManager from '@/components/CategoryManager'
 import StatementImport from '@/components/StatementImport'
 import AccountModal from '@/components/AccountModal'
+import CategoryRules from '@/components/CategoryRules'
 import type { Budget, Category, Transaction } from '@/types'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -540,6 +541,9 @@ export default function Home() {
           onDelete={deleteCategory}
           onEdit={editCategory}
         />
+
+        {/* ── Category rules ── */}
+        <CategoryRules categories={categories} />
 
         <p className="text-center text-slate-700 text-xs pb-4">
           Data stored locally in SQLite · Budget Tracker

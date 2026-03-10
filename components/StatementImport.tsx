@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import type { Category } from '@/types'
+import { applyRules, extractKeyword, type CategoryRule } from '@/lib/categorization'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ interface ParsedRow {
   category: string
   isDuplicate: boolean
   skip: boolean
+  matchedByRule: boolean
 }
 
 interface Props {
@@ -204,7 +206,12 @@ export default function StatementImport({ categories, onImportDone }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [importDone, setImportDone] = useState(false)
+  const [rules, setRules] = useState<CategoryRule[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    fetch('/api/category-rules').then((r) => r.ok ? r.json() : []).then(setRules).catch(() => {})
+  }, [])
 
   // ── file handling ────────────────────────────────────────────────────────
 
@@ -238,16 +245,23 @@ export default function StatementImport({ categories, onImportDone }: Props) {
       const checked: (CSVTransaction & { isDuplicate: boolean })[] = await res.json()
 
       setRows(
-        checked.map((t) => ({
-          id: nextId++,
-          date: t.date,
-          description: t.description,
-          amount: t.amount,
-          type: t.type,
-          category: autoCategory(t.description, categories),
-          isDuplicate: t.isDuplicate,
-          skip: t.isDuplicate, // pre-skip duplicates; user can un-skip
-        }))
+        checked.map((t) => {
+          const matchedRule = applyRules(t.description, rules)
+          const category = matchedRule
+            ? matchedRule.category
+            : autoCategory(t.description, categories)
+          return {
+            id: nextId++,
+            date: t.date,
+            description: t.description,
+            amount: t.amount,
+            type: t.type,
+            category,
+            isDuplicate: t.isDuplicate,
+            skip: t.isDuplicate,
+            matchedByRule: !!matchedRule,
+          }
+        })
       )
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to process file')
@@ -277,6 +291,23 @@ export default function StatementImport({ categories, onImportDone }: Props) {
 
   const toggleAll = useCallback((skip: boolean) => setRows((prev) => prev.map((r) => ({ ...r, skip }))), [])
   const setAllType = useCallback((type: 'income' | 'expense') => setRows((prev) => prev.map((r) => ({ ...r, type }))), [])
+
+  function saveRule(description: string, category: string) {
+    const keyword = extractKeyword(description)
+    if (!keyword) return
+    fetch('/api/category-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword, category }),
+    }).then((r) => r.ok ? r.json() : null).then((rule) => {
+      if (rule) setRules((prev) => {
+        const idx = prev.findIndex((r) => r.id === rule.id)
+        return idx >= 0
+          ? prev.map((r) => r.id === rule.id ? rule : r)
+          : [...prev, rule]
+      })
+    }).catch(() => {})
+  }
 
   // ── import ───────────────────────────────────────────────────────────────
 
@@ -463,10 +494,21 @@ export default function StatementImport({ categories, onImportDone }: Props) {
                   ${row.amount.toFixed(2)}
                 </span>
 
+                {/* Rule indicator */}
+                {row.matchedByRule && !row.skip && (
+                  <span title="Auto-assigned by your saved rules" className="shrink-0 px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 text-[10px] font-semibold">
+                    rule
+                  </span>
+                )}
+
                 {/* Category */}
                 <select
                   value={row.category}
-                  onChange={(e) => update(row.id, 'category', e.target.value)}
+                  onChange={(e) => {
+                    update(row.id, 'category', e.target.value)
+                    update(row.id, 'matchedByRule', false)
+                    saveRule(row.description, e.target.value)
+                  }}
                   className="shrink-0 bg-slate-700 border border-slate-600 rounded-lg px-1.5 py-0.5 text-slate-200 focus:outline-none focus:border-blue-500 w-32"
                 >
                   <option value="" disabled>Category…</option>

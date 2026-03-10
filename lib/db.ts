@@ -40,6 +40,60 @@ export async function seedCategories(db: Client, userId: number): Promise<void> 
   )
 }
 
+const DEFAULT_RULES: Array<[string, string]> = [
+  ['WALMART', 'Groceries'],
+  ['KROGER', 'Groceries'],
+  ['COSTCO', 'Groceries'],
+  ['TRADER JOE', 'Groceries'],
+  ['WHOLE FOODS', 'Groceries'],
+  ['ALDI', 'Groceries'],
+  ['PUBLIX', 'Groceries'],
+  ['SAFEWAY', 'Groceries'],
+  ['TARGET', 'Groceries'],
+  ['AMAZON', 'Other'],
+  ['NETFLIX', 'Entertainment'],
+  ['SPOTIFY', 'Entertainment'],
+  ['HULU', 'Entertainment'],
+  ['DISNEY', 'Entertainment'],
+  ['APPLE', 'Entertainment'],
+  ['YOUTUBE', 'Entertainment'],
+  ['SHELL', 'Transportation'],
+  ['CHEVRON', 'Transportation'],
+  ['EXXON', 'Transportation'],
+  ['BP', 'Transportation'],
+  ['SPEEDWAY', 'Transportation'],
+  ['UBER', 'Transportation'],
+  ['LYFT', 'Transportation'],
+  ['DOORDASH', 'Eating Out'],
+  ['GRUBHUB', 'Eating Out'],
+  ['CHIPOTLE', 'Eating Out'],
+  ['MCDONALD', 'Eating Out'],
+  ['STARBUCKS', 'Eating Out'],
+  ['SUBWAY', 'Eating Out'],
+  ['CHICK', 'Eating Out'],
+  ['AT&T', 'Phone/Internet'],
+  ['VERIZON', 'Phone/Internet'],
+  ['T-MOBILE', 'Phone/Internet'],
+  ['COMCAST', 'Utilities'],
+  ['SPECTRUM', 'Utilities'],
+  ['XFINITY', 'Utilities'],
+  ['CVS', 'Health/Medical'],
+  ['WALGREENS', 'Health/Medical'],
+  ['PLANET FITNESS', 'Gym'],
+  ['LA FITNESS', 'Gym'],
+]
+
+/** Seed default category rules for a newly registered user. */
+export async function seedCategoryRules(db: Client, userId: number): Promise<void> {
+  await db.batch(
+    DEFAULT_RULES.map(([keyword, category]) => ({
+      sql: 'INSERT OR IGNORE INTO category_rules (user_id, keyword, category) VALUES (?, ?, ?)',
+      args: [userId, keyword, category],
+    })),
+    'write'
+  )
+}
+
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
 declare global {
