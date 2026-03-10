@@ -27,6 +27,23 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
   const [editDate, setEditDate] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Inline note editing
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+
+  function startNoteEdit(t: Transaction) {
+    setEditingNoteId(t.id)
+    setNoteText(t.notes)
+  }
+
+  async function saveNote(t: Transaction) {
+    setSavingNote(true)
+    await onEdit(t.id, { amount: t.amount, type: t.type, category: t.category, notes: noteText, date: t.date })
+    setSavingNote(false)
+    setEditingNoteId(null)
+  }
+
   function startEdit(t: Transaction) {
     setEditingId(t.id)
     setEditAmount(String(t.amount))
@@ -194,11 +211,47 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
                   ))}
                 </select>
 
-                {t.notes ? (
-                  <span className="hidden sm:block text-slate-500 text-xs truncate max-w-[120px]" title={t.notes}>
-                    {t.notes}
-                  </span>
-                ) : null}
+                {editingNoteId === t.id ? (
+                  <div className="hidden sm:flex items-center gap-1 flex-1 min-w-0">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={noteText}
+                      onChange={(e) => setNoteText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveNote(t)
+                        if (e.key === 'Escape') setEditingNoteId(null)
+                      }}
+                      placeholder="Add a note…"
+                      maxLength={200}
+                      className="flex-1 min-w-0 bg-slate-700 border border-blue-500/50 rounded-lg px-2 py-1 text-slate-100 placeholder-slate-500 text-xs focus:outline-none"
+                    />
+                    <button
+                      onClick={() => saveNote(t)}
+                      disabled={savingNote}
+                      className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50 flex-shrink-0"
+                    >
+                      {savingNote ? '…' : '✓'}
+                    </button>
+                    <button
+                      onClick={() => setEditingNoteId(null)}
+                      className="text-xs text-slate-500 hover:text-slate-300 flex-shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => startNoteEdit(t)}
+                    title={t.notes || 'Add note'}
+                    className="hidden sm:block text-xs truncate max-w-[120px] flex-shrink-0 transition-colors text-left"
+                  >
+                    {t.notes
+                      ? <span className="text-slate-500 hover:text-slate-300">{t.notes}</span>
+                      : <span className="text-slate-700 hover:text-slate-500 opacity-0 group-hover:opacity-100">+ note</span>
+                    }
+                  </button>
+                )}
 
                 <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${t.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
                   {t.type === 'income' ? '+' : '−'}${t.amount.toFixed(2)}
