@@ -276,6 +276,7 @@ export default function StatementImport({ categories, onImportDone }: Props) {
   }, [])
 
   const toggleAll = useCallback((skip: boolean) => setRows((prev) => prev.map((r) => ({ ...r, skip }))), [])
+  const setAllType = useCallback((type: 'income' | 'expense') => setRows((prev) => prev.map((r) => ({ ...r, type }))), [])
 
   // ── import ───────────────────────────────────────────────────────────────
 
@@ -384,7 +385,10 @@ export default function StatementImport({ categories, onImportDone }: Props) {
                 </>
               )}
             </div>
-            <div className="flex gap-2 text-xs shrink-0">
+            <div className="flex gap-2 text-xs shrink-0 flex-wrap justify-end">
+              <button onClick={() => setAllType('expense')} className="px-2 py-0.5 rounded-lg bg-red-900/50 text-red-300 hover:bg-red-900 transition-colors font-semibold">All Expense</button>
+              <button onClick={() => setAllType('income')} className="px-2 py-0.5 rounded-lg bg-emerald-900/50 text-emerald-300 hover:bg-emerald-900 transition-colors font-semibold">All Income</button>
+              <span className="text-slate-700">|</span>
               <button onClick={() => toggleAll(false)} className="text-blue-400 hover:text-blue-300 transition-colors">Select all</button>
               <span className="text-slate-700">|</span>
               <button onClick={() => toggleAll(true)} className="text-slate-400 hover:text-slate-200 transition-colors">Deselect all</button>
