@@ -37,6 +37,27 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  const user = await getAuthUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const month = searchParams.get('month')
+    if (!month) return NextResponse.json({ error: 'month param required' }, { status: 400 })
+
+    await db.execute({
+      sql: `DELETE FROM transactions WHERE user_id = ? AND strftime('%Y-%m', date) = ?`,
+      args: [user.userId, month],
+    })
+
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Failed to clear transactions' }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

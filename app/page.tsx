@@ -213,6 +213,11 @@ export default function Home() {
     if (r.ok) await fetchBudgets()
   }
 
+  async function clearTransactions() {
+    const r = await fetch(`/api/transactions?month=${month}`, { method: 'DELETE' })
+    if (r.ok) setTransactions([])
+  }
+
   async function deleteBudget(category: string) {
     const r = await fetch('/api/budgets', {
       method: 'DELETE',
@@ -514,6 +519,7 @@ export default function Home() {
             categories={categories}
             onDelete={deleteTransaction}
             onEdit={editTransaction}
+            onClearAll={clearTransactions}
           />
         </div>
 

@@ -8,6 +8,7 @@ interface Props {
   categories: Category[]
   onDelete: (id: number) => Promise<void>
   onEdit: (id: number, t: Omit<Transaction, 'id'>) => Promise<void>
+  onClearAll: () => Promise<void>
 }
 
 function fmtDate(d: string) {
@@ -15,7 +16,7 @@ function fmtDate(d: string) {
   return new Date(y, m - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function TransactionLog({ transactions, categories, onDelete, onEdit }: Props) {
+export default function TransactionLog({ transactions, categories, onDelete, onEdit, onClearAll }: Props) {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
 
@@ -80,7 +81,20 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
 
   return (
     <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl flex flex-col h-full">
-      <h2 className="text-slate-200 font-semibold text-base mb-4">Transaction Log</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-slate-200 font-semibold text-base">Transaction Log</h2>
+        {transactions.length > 0 && (
+          <button
+            onClick={async () => {
+              if (!confirm('Clear all transactions for this month? This cannot be undone.')) return
+              await onClearAll()
+            }}
+            className="text-xs px-2.5 py-1 rounded-lg border border-red-800/60 text-red-500 hover:text-red-300 hover:border-red-600 hover:bg-red-950/40 transition-colors"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
 
       {transactions.length === 0 ? (
         <div className="flex-1 flex items-center justify-center min-h-[200px]">
