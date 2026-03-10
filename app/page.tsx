@@ -259,6 +259,12 @@ export default function Home() {
               💰
             </span>
             <h1 className="text-lg font-bold tracking-tight text-slate-100">Budget Tracker</h1>
+            <button
+              onClick={() => router.push('/total')}
+              className="ml-1 text-xs px-2.5 py-1 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+            >
+              Yearly
+            </button>
           </div>
 
           {/* Month navigator */}
