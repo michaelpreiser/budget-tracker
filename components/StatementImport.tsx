@@ -26,7 +26,6 @@ interface Props {
 // ─── Auto-categorization ─────────────────────────────────────────────────────
 
 const CATEGORY_RULES: Array<[RegExp, string]> = [
-  // Income signals first so payroll isn't mis-matched below
   [/payroll|direct dep|salary|wages|dividend|interest earned|tax refund|irs|ssdi|ssi/i, 'Income'],
   [/rent|mortgage|lease|hoa/i, 'Rent/Mortgage'],
   [/electric|gas bill|water bill|internet|cable|spectrum|comcast|at&t|verizon|t-?mobile|utility|utilities|phone bill|cox|xfinity/i, 'Utilities'],
@@ -47,7 +46,6 @@ function autoCategory(description: string, categories: Category[]): string {
   for (const [pattern, suggested] of CATEGORY_RULES) {
     if (pattern.test(description)) {
       if (categoryNames.has(suggested)) return suggested
-      // Fuzzy fallback: find a user category that shares a word with the suggestion
       const words = suggested.toLowerCase().split(/[\s/]+/)
       const fallback = categories.find((c) =>
         words.some((w) => c.name.toLowerCase().includes(w))
@@ -95,45 +93,85 @@ interface ColMap {
   credit?: number
 }
 
-function detectColumns(headers: string[]): ColMap | null {
+// Header-based detection — tries to match column names
+function detectColumnsByHeader(headers: string[]): ColMap | null {
+  // Strip all non-alphanumeric for fuzzy matching
   const h = headers.map((s) => s.toLowerCase().replace(/[^a-z0-9]/g, ''))
-  const idx = (terms: string[]) => h.findIndex((c) => terms.some((t) => c.includes(t)))
+  const idx = (terms: string[]) => h.findIndex((c) => terms.some((t) => c === t || c.includes(t)))
 
-  const dateIdx = idx(['date', 'transdate', 'postdate', 'posteddate'])
-  const descIdx = idx(['description', 'desc', 'memo', 'detail', 'payee', 'name', 'narrative', 'particulars'])
-  const amtIdx  = idx(['amount', 'amt', 'transactionamount'])
-  const debIdx  = idx(['debit', 'withdrawal', 'withdrawals', 'charge', 'dr'])
-  const creIdx  = idx(['credit', 'deposit', 'deposits', 'cr'])
+  const dateIdx = idx([
+    'date', 'transactiondate', 'transdate', 'postdate', 'posteddate',
+    'postingdate', 'settledate', 'settlementdate', 'valuedate',
+  ])
+  const descIdx = idx([
+    'description', 'fulldescription', 'transactiondescription', 'desc',
+    'memo', 'detail', 'payee', 'name', 'narrative', 'particulars',
+    'merchantname', 'merchant', 'reference',
+  ])
+  const amtIdx = idx(['amount', 'amt', 'transactionamount', 'txnamount'])
+  const debIdx = idx(['debit', 'debitamount', 'withdrawal', 'withdrawals', 'charge', 'dr'])
+  const creIdx = idx(['credit', 'creditamount', 'deposit', 'deposits', 'cr'])
 
   if (dateIdx === -1 || descIdx === -1) return null
   if (amtIdx !== -1) return { date: dateIdx, description: descIdx, amount: amtIdx }
   if (debIdx !== -1 && creIdx !== -1) return { date: dateIdx, description: descIdx, debit: debIdx, credit: creIdx }
+  // Single debit-only column (charge cards)
+  if (debIdx !== -1) return { date: dateIdx, description: descIdx, amount: debIdx }
   return null
-}
-
-function normalizeDate(raw: string): string {
-  raw = raw.replace(/^["']|["']$/g, '').trim()
-  // YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
-  // MM/DD/YYYY or MM/DD/YY
-  const mdy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
-  if (mdy) {
-    let y = parseInt(mdy[3]); if (y < 100) y += 2000
-    return `${y}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`
-  }
-  // MM-DD-YYYY
-  const mdyd = raw.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/)
-  if (mdyd) {
-    let y = parseInt(mdyd[3]); if (y < 100) y += 2000
-    return `${y}-${mdyd[1].padStart(2, '0')}-${mdyd[2].padStart(2, '0')}`
-  }
-  return raw
 }
 
 function parseAmount(raw: string): number {
   if (!raw || raw.trim() === '') return NaN
   const s = raw.replace(/[$,\s]/g, '').replace(/^\((.+)\)$/, '-$1')
   return parseFloat(s)
+}
+
+// Data-pattern detection — for headerless CSVs like Wells Fargo
+function detectColumnsByData(grid: string[][]): ColMap | null {
+  const sample = grid.slice(0, Math.min(10, grid.length))
+  const numCols = Math.max(...sample.map((r) => r.length), 0)
+  if (numCols < 2) return null
+
+  let dateIdx = -1, amtIdx = -1, descIdx = -1
+  let bestDate = 0, bestAmt = 0, bestDesc = 0
+
+  for (let c = 0; c < numCols; c++) {
+    const vals = sample.map((r) => (r[c] ?? '').trim()).filter(Boolean)
+    if (vals.length < 2) continue
+
+    const dateFrac = vals.filter((v) =>
+      /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(v) || /^\d{4}-\d{2}-\d{2}$/.test(v)
+    ).length / vals.length
+
+    const amtFrac = vals.filter((v) => !isNaN(parseAmount(v))).length / vals.length
+
+    const textFrac = vals.filter((v) => /[a-zA-Z]{3,}/.test(v)).length / vals.length
+    const avgLen = vals.reduce((s, v) => s + v.length, 0) / vals.length
+    const descScore = textFrac * Math.min(avgLen / 8, 3)
+
+    if (dateFrac >= 0.6 && dateFrac > bestDate) { bestDate = dateFrac; dateIdx = c }
+    if (amtFrac >= 0.6 && amtFrac > bestAmt && c !== dateIdx) { bestAmt = amtFrac; amtIdx = c }
+    if (descScore > bestDesc && c !== dateIdx) { bestDesc = descScore; descIdx = c }
+  }
+
+  if (dateIdx === -1 || amtIdx === -1 || descIdx === -1 || amtIdx === descIdx) return null
+  return { date: dateIdx, description: descIdx, amount: amtIdx }
+}
+
+function normalizeDate(raw: string): string {
+  raw = raw.replace(/^["']|["']$/g, '').trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  const mdy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (mdy) {
+    let y = parseInt(mdy[3]); if (y < 100) y += 2000
+    return `${y}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`
+  }
+  const mdyd = raw.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/)
+  if (mdyd) {
+    let y = parseInt(mdyd[3]); if (y < 100) y += 2000
+    return `${y}-${mdyd[1].padStart(2, '0')}-${mdyd[2].padStart(2, '0')}`
+  }
+  return raw
 }
 
 interface CSVTransaction {
@@ -143,27 +181,10 @@ interface CSVTransaction {
   type: 'income' | 'expense'
 }
 
-function parseStatement(raw: string): CSVTransaction[] {
-  const grid = parseCSV(raw)
-  if (grid.length < 2) throw new Error('CSV has fewer than 2 rows')
-
-  // Find the header row — first row where we can detect columns
-  let headerIdx = -1
-  let colMap: ColMap | null = null
-  for (let i = 0; i < Math.min(grid.length, 8); i++) {
-    colMap = detectColumns(grid[i])
-    if (colMap) { headerIdx = i; break }
-  }
-
-  if (headerIdx === -1 || !colMap) {
-    throw new Error(
-      'Could not identify date, description, and amount columns.\n' +
-      'Expected headers like: Date, Description, Amount  (or Debit / Credit).'
-    )
-  }
-
+// Pure row builder — given a detected colMap and the start row
+function buildTransactions(grid: string[][], startIdx: number, colMap: ColMap): CSVTransaction[] {
   const results: CSVTransaction[] = []
-  for (let i = headerIdx + 1; i < grid.length; i++) {
+  for (let i = startIdx; i < grid.length; i++) {
     const row = grid[i]
     const rawDate = row[colMap.date] ?? ''
     const rawDesc = row[colMap.description] ?? ''
@@ -179,10 +200,9 @@ function parseStatement(raw: string): CSVTransaction[] {
       type = amount > 0 ? 'income' : 'expense'
       amount = Math.abs(amount)
     } else {
-      // Separate debit / credit columns
-      const debit  = parseAmount(row[colMap.debit!] ?? '')
+      const debit  = parseAmount(row[colMap.debit!]  ?? '')
       const credit = parseAmount(row[colMap.credit!] ?? '')
-      const hasDebit  = !isNaN(debit) && debit !== 0
+      const hasDebit  = !isNaN(debit)  && debit  !== 0
       const hasCredit = !isNaN(credit) && credit !== 0
       if (!hasDebit && !hasCredit) continue
       if (hasCredit && !hasDebit) { amount = Math.abs(credit); type = 'income' }
@@ -191,8 +211,28 @@ function parseStatement(raw: string): CSVTransaction[] {
 
     results.push({ date, description: rawDesc, amount, type })
   }
-
   return results
+}
+
+// ─── Column detection pipeline ────────────────────────────────────────────────
+
+interface DetectResult {
+  colMap: ColMap
+  headerIdx: number  // -1 means no header row (data starts at row 0)
+}
+
+function detectColumns(grid: string[][]): DetectResult | null {
+  // 1. Header-based: scan first 10 rows for recognisable column names
+  for (let i = 0; i < Math.min(grid.length, 10); i++) {
+    const colMap = detectColumnsByHeader(grid[i])
+    if (colMap) return { colMap, headerIdx: i }
+  }
+
+  // 2. Data-pattern: headerless CSVs (Wells Fargo, etc.)
+  const colMap = detectColumnsByData(grid)
+  if (colMap) return { colMap, headerIdx: -1 }
+
+  return null
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -207,11 +247,55 @@ export default function StatementImport({ categories, onImportDone }: Props) {
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [importDone, setImportDone] = useState(false)
   const [rules, setRules] = useState<CategoryRule[]>([])
+
+  // Manual column mapping state (fallback when auto-detect fails)
+  const [pendingGrid, setPendingGrid] = useState<string[][] | null>(null)
+  const [manualDate, setManualDate] = useState('')
+  const [manualDesc, setManualDesc] = useState('')
+  const [manualAmt, setManualAmt] = useState('')
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/category-rules').then((r) => r.ok ? r.json() : []).then(setRules).catch(() => {})
   }, [])
+
+  // ── process parsed transactions ──────────────────────────────────────────
+
+  async function processTransactions(parsed: CSVTransaction[]) {
+    if (parsed.length === 0) {
+      setError('No transactions found. Check that the correct columns are selected.')
+      return
+    }
+    setLoadingMsg('Checking for duplicates…')
+    const res = await fetch('/api/import-statement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactions: parsed }),
+    })
+    if (!res.ok) throw new Error('Duplicate check failed')
+    const checked: (CSVTransaction & { isDuplicate: boolean })[] = await res.json()
+
+    setRows(
+      checked.map((t) => {
+        const matchedRule = applyRules(t.description, rules)
+        const category = matchedRule
+          ? matchedRule.category
+          : autoCategory(t.description, categories)
+        return {
+          id: nextId++,
+          date: t.date,
+          description: t.description,
+          amount: t.amount,
+          type: t.type,
+          category,
+          isDuplicate: t.isDuplicate,
+          skip: t.isDuplicate,
+          matchedByRule: !!matchedRule,
+        }
+      })
+    )
+  }
 
   // ── file handling ────────────────────────────────────────────────────────
 
@@ -222,47 +306,58 @@ export default function StatementImport({ categories, onImportDone }: Props) {
     }
     setError(null)
     setRows([])
+    setPendingGrid(null)
     setImportDone(false)
     setLoading(true)
     setLoadingMsg('Parsing CSV…')
 
     try {
       const text = await file.text()
-      const parsed = parseStatement(text)
+      const grid = parseCSV(text)
+      if (grid.length < 2) throw new Error('CSV has fewer than 2 rows')
 
-      if (parsed.length === 0) {
-        setError('No transactions found. Check that your CSV has Date, Description, and Amount columns.')
+      const detected = detectColumns(grid)
+
+      if (!detected) {
+        // Fall back to manual mapping UI
+        setPendingGrid(grid)
+        setLoading(false)
+        setLoadingMsg('')
         return
       }
 
-      setLoadingMsg('Checking for duplicates…')
-      const res = await fetch('/api/import-statement', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactions: parsed }),
-      })
-      if (!res.ok) throw new Error('Duplicate check failed')
-      const checked: (CSVTransaction & { isDuplicate: boolean })[] = await res.json()
+      const { colMap, headerIdx } = detected
+      const parsed = buildTransactions(grid, headerIdx + 1, colMap)
+      await processTransactions(parsed)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to process file')
+    } finally {
+      setLoading(false)
+      setLoadingMsg('')
+    }
+  }
 
-      setRows(
-        checked.map((t) => {
-          const matchedRule = applyRules(t.description, rules)
-          const category = matchedRule
-            ? matchedRule.category
-            : autoCategory(t.description, categories)
-          return {
-            id: nextId++,
-            date: t.date,
-            description: t.description,
-            amount: t.amount,
-            type: t.type,
-            category,
-            isDuplicate: t.isDuplicate,
-            skip: t.isDuplicate,
-            matchedByRule: !!matchedRule,
-          }
-        })
-      )
+  // ── manual mapping apply ─────────────────────────────────────────────────
+
+  async function handleManualParse() {
+    if (!pendingGrid || manualDate === '' || manualDesc === '' || manualAmt === '') return
+    setError(null)
+    setLoading(true)
+    setLoadingMsg('Parsing with selected columns…')
+    try {
+      const colMap: ColMap = {
+        date: parseInt(manualDate),
+        description: parseInt(manualDesc),
+        amount: parseInt(manualAmt),
+      }
+      // Skip row 0 if it looks like a header (non-numeric in all chosen columns)
+      const firstRow = pendingGrid[0]
+      const firstIsHeader = isNaN(parseAmount(firstRow[colMap.amount!] ?? '')) &&
+        normalizeDate(firstRow[colMap.date] ?? '') === (firstRow[colMap.date] ?? '').trim()
+      const startIdx = firstIsHeader ? 1 : 0
+      const parsed = buildTransactions(pendingGrid, startIdx, colMap)
+      await processTransactions(parsed)
+      setPendingGrid(null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to process file')
     } finally {
@@ -302,9 +397,7 @@ export default function StatementImport({ categories, onImportDone }: Props) {
     }).then((r) => r.ok ? r.json() : null).then((rule) => {
       if (rule) setRules((prev) => {
         const idx = prev.findIndex((r) => r.id === rule.id)
-        return idx >= 0
-          ? prev.map((r) => r.id === rule.id ? rule : r)
-          : [...prev, rule]
+        return idx >= 0 ? prev.map((r) => r.id === rule.id ? rule : r) : [...prev, rule]
       })
     }).catch(() => {})
   }
@@ -344,8 +437,19 @@ export default function StatementImport({ categories, onImportDone }: Props) {
 
   // ── derived ──────────────────────────────────────────────────────────────
 
-  const active   = rows.filter((r) => !r.skip)
+  const active    = rows.filter((r) => !r.skip)
   const dupeCount = rows.filter((r) => r.isDuplicate && !r.skip).length
+
+  // Column labels for manual mapping UI
+  const colLabels = pendingGrid
+    ? (pendingGrid[0] ?? []).map((h, i) =>
+        h && h.length < 40 && /[a-zA-Z]/.test(h)
+          ? `${i + 1}: ${h}`
+          : `Column ${i + 1}`
+      )
+    : []
+  const manualReady = manualDate !== '' && manualDesc !== '' && manualAmt !== '' &&
+    manualDate !== manualDesc && manualDate !== manualAmt && manualDesc !== manualAmt
 
   // ── render ───────────────────────────────────────────────────────────────
 
@@ -353,8 +457,8 @@ export default function StatementImport({ categories, onImportDone }: Props) {
     <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl">
       <h2 className="text-slate-200 font-semibold text-base mb-4">Import Bank Statement (CSV)</h2>
 
-      {/* Drop zone — only shown when no rows loaded */}
-      {rows.length === 0 && (
+      {/* Drop zone */}
+      {rows.length === 0 && !pendingGrid && (
         <div
           onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
@@ -379,6 +483,85 @@ export default function StatementImport({ categories, onImportDone }: Props) {
               <p className="text-slate-500 text-xs">or click to browse · export CSV from your bank&apos;s transaction history</p>
             </>
           )}
+        </div>
+      )}
+
+      {/* ── Manual column mapping UI ── */}
+      {pendingGrid && rows.length === 0 && (
+        <div className="space-y-4">
+          <div className="rounded-xl bg-amber-950/40 border border-amber-700/40 px-4 py-3">
+            <p className="text-amber-300 text-sm font-medium">Couldn&apos;t auto-detect columns</p>
+            <p className="text-amber-400/70 text-xs mt-0.5">
+              Select which column contains each field below, then click Parse.
+            </p>
+          </div>
+
+          {/* Preview of raw CSV */}
+          <div className="overflow-x-auto rounded-xl border border-slate-700 text-xs">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-700 bg-slate-800/60">
+                  {(pendingGrid[0] ?? []).map((_, i) => (
+                    <th key={i} className="px-3 py-2 text-left text-slate-500 font-medium whitespace-nowrap">
+                      Col {i + 1}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pendingGrid.slice(0, 4).map((row, ri) => (
+                  <tr key={ri} className="border-b border-slate-800/50 last:border-0">
+                    {row.map((cell, ci) => (
+                      <td key={ci} className="px-3 py-1.5 text-slate-400 whitespace-nowrap max-w-[160px] truncate">
+                        {cell || <span className="text-slate-700">—</span>}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Column assignment dropdowns */}
+          <div className="grid grid-cols-3 gap-3">
+            {(
+              [
+                { label: 'Date column', value: manualDate, set: setManualDate, colour: 'border-blue-500/50' },
+                { label: 'Description column', value: manualDesc, set: setManualDesc, colour: 'border-emerald-500/50' },
+                { label: 'Amount column', value: manualAmt, set: setManualAmt, colour: 'border-red-500/50' },
+              ] as const
+            ).map(({ label, value, set, colour }) => (
+              <div key={label}>
+                <p className="text-slate-500 text-xs mb-1">{label}</p>
+                <select
+                  value={value}
+                  onChange={(e) => set(e.target.value)}
+                  className={`w-full bg-slate-800 border ${colour} rounded-lg px-2 py-1.5 text-slate-200 text-xs focus:outline-none`}
+                >
+                  <option value="" disabled>Select…</option>
+                  {colLabels.map((lbl, i) => (
+                    <option key={i} value={String(i)}>{lbl}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setPendingGrid(null); setError(null) }}
+              className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleManualParse}
+              disabled={!manualReady || loading}
+              className="flex-1 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl transition-colors"
+            >
+              {loading ? loadingMsg : 'Parse with these columns'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -424,12 +607,7 @@ export default function StatementImport({ categories, onImportDone }: Props) {
               <span className="text-slate-700">|</span>
               <button onClick={() => toggleAll(true)} className="text-slate-400 hover:text-slate-200 transition-colors">Deselect all</button>
               <span className="text-slate-700">|</span>
-              <button
-                onClick={() => { setRows([]); setError(null) }}
-                className="text-red-400 hover:text-red-300 transition-colors"
-              >
-                Cancel
-              </button>
+              <button onClick={() => { setRows([]); setError(null) }} className="text-red-400 hover:text-red-300 transition-colors">Cancel</button>
             </div>
           </div>
 
@@ -439,25 +617,16 @@ export default function StatementImport({ categories, onImportDone }: Props) {
               <div
                 key={row.id}
                 className={`flex items-center gap-2 px-3 py-2 text-xs transition-colors ${
-                  row.skip
-                    ? 'opacity-40 bg-slate-900'
-                    : row.isDuplicate
-                    ? 'bg-amber-950/30'
-                    : 'bg-slate-800/50'
+                  row.skip ? 'opacity-40 bg-slate-900' : row.isDuplicate ? 'bg-amber-950/30' : 'bg-slate-800/50'
                 }`}
               >
-                {/* Skip checkbox */}
                 <input
                   type="checkbox"
                   checked={!row.skip}
                   onChange={() => update(row.id, 'skip', !row.skip)}
                   className="accent-blue-500 shrink-0"
                 />
-
-                {/* Date */}
                 <span className="text-slate-400 shrink-0 w-[88px]">{row.date}</span>
-
-                {/* Description */}
                 <input
                   type="text"
                   value={row.description}
@@ -465,15 +634,11 @@ export default function StatementImport({ categories, onImportDone }: Props) {
                   className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-slate-600 focus:border-blue-500 focus:outline-none text-slate-300 truncate py-0.5 transition-colors"
                   title={row.description}
                 />
-
-                {/* Duplicate badge */}
                 {row.isDuplicate && !row.skip && (
                   <span className="shrink-0 px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-300 text-[10px] font-semibold whitespace-nowrap">
                     dupe?
                   </span>
                 )}
-
-                {/* Type toggle */}
                 <button
                   onClick={() => update(row.id, 'type', row.type === 'expense' ? 'income' : 'expense')}
                   className={`shrink-0 px-2 py-0.5 rounded-lg font-semibold transition-colors ${
@@ -484,24 +649,14 @@ export default function StatementImport({ categories, onImportDone }: Props) {
                 >
                   {row.type === 'income' ? '+' : '−'}
                 </button>
-
-                {/* Amount */}
-                <span
-                  className={`shrink-0 tabular-nums w-20 text-right font-semibold ${
-                    row.type === 'income' ? 'text-emerald-400' : 'text-red-400'
-                  }`}
-                >
+                <span className={`shrink-0 tabular-nums w-20 text-right font-semibold ${row.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
                   ${row.amount.toFixed(2)}
                 </span>
-
-                {/* Rule indicator */}
                 {row.matchedByRule && !row.skip && (
                   <span title="Auto-assigned by your saved rules" className="shrink-0 px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 text-[10px] font-semibold">
                     rule
                   </span>
                 )}
-
-                {/* Category */}
                 <select
                   value={row.category}
                   onChange={(e) => {
@@ -533,9 +688,7 @@ export default function StatementImport({ categories, onImportDone }: Props) {
               disabled={loading || active.length === 0}
               className="flex-1 py-2.5 text-sm font-semibold bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white rounded-xl transition-colors"
             >
-              {loading
-                ? loadingMsg
-                : `Confirm & Import ${active.length} Transaction${active.length !== 1 ? 's' : ''}`}
+              {loading ? loadingMsg : `Confirm & Import ${active.length} Transaction${active.length !== 1 ? 's' : ''}`}
             </button>
           </div>
         </div>
