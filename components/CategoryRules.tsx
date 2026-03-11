@@ -9,18 +9,22 @@ interface Props {
 }
 
 export default function CategoryRules({ categories }: Props) {
+  const [open, setOpen] = useState(false)
   const [rules, setRules] = useState<CategoryRule[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editCategory, setEditCategory] = useState('')
 
   const fetchRules = useCallback(async () => {
+    setLoading(true)
     const r = await fetch('/api/category-rules')
     if (r.ok) setRules(await r.json())
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchRules() }, [fetchRules])
+  useEffect(() => {
+    if (open && rules.length === 0 && !loading) fetchRules()
+  }, [open, rules.length, loading, fetchRules])
 
   async function handleCategoryChange(rule: CategoryRule, category: string) {
     setEditingId(null)
@@ -40,17 +44,24 @@ export default function CategoryRules({ categories }: Props) {
 
   return (
     <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between group"
+      >
+        <div className="text-left">
           <h2 className="text-slate-200 font-semibold text-base">Category Rules</h2>
-          <p className="text-slate-500 text-xs mt-0.5">
-            Keywords automatically matched to categories when importing transactions.
-          </p>
+          {!open && (
+            <p className="text-slate-500 text-xs mt-0.5">
+              Keywords auto-assigned when importing transactions.
+            </p>
+          )}
         </div>
-        <span className="text-slate-600 text-xs tabular-nums">{rules.length} rules</span>
-      </div>
+        <span className="text-slate-500 text-sm group-hover:text-slate-300 transition-colors">
+          {open ? '▲' : '▼'}
+        </span>
+      </button>
 
-      {loading ? (
+      {!open ? null : loading ? (
         <div className="flex justify-center py-8">
           <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
