@@ -19,6 +19,7 @@ export default function TotalPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [excludedFromExpenses, setExcludedFromExpenses] = useState<string[]>(['Investing'])
+  const [showExclusionPanel, setShowExclusionPanel] = useState(false)
   const [excludedFromIncome, setExcludedFromIncome] = useState<string[]>([])
   const [showIncomeExclusionPanel, setShowIncomeExclusionPanel] = useState(false)
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
@@ -30,6 +31,9 @@ export default function TotalPage() {
       if (saved) setExcludedFromExpenses(JSON.parse(saved))
     } catch {}
   }, [])
+  useEffect(() => {
+    localStorage.setItem('excludedFromExpenses', JSON.stringify(excludedFromExpenses))
+  }, [excludedFromExpenses])
   useEffect(() => {
     try {
       const saved = localStorage.getItem('excludedFromIncome')
@@ -74,6 +78,7 @@ export default function TotalPage() {
       return acc
     }, {} as Record<string, number>)
 
+  const allExpenseCategories = Object.keys(expenseByCategory).sort()
   const allIncomeCategories = Object.keys(incomeByCategory).sort()
 
   const excludedTotal = excludedFromExpenses.reduce(
@@ -218,14 +223,54 @@ export default function TotalPage() {
 
               {/* Expenses */}
               <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
-                <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">Expenses</p>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">Expenses</p>
+                  <button
+                    onClick={() => setShowExclusionPanel((v) => !v)}
+                    title="Customize excluded expense categories"
+                    className={`text-xs px-2 py-0.5 rounded-lg border transition-colors ${
+                      showExclusionPanel
+                        ? 'border-blue-500/50 text-blue-400 bg-blue-500/10'
+                        : 'border-slate-700 text-slate-500 hover:text-slate-300 hover:border-slate-600'
+                    }`}
+                  >
+                    {showExclusionPanel ? 'done' : 'edit'}
+                  </button>
+                </div>
                 <p className="text-2xl font-bold tabular-nums leading-none text-red-400">
                   −${fmt(adjustedExpenses)}
                 </p>
-                {activeExclusions.length > 0 && (
+                {!showExclusionPanel && activeExclusions.length > 0 && (
                   <p className="text-slate-600 text-xs mt-1.5 tabular-nums">
                     excl. ${fmt(excludedTotal)} in {activeExclusions.join(', ')}
                   </p>
+                )}
+                {showExclusionPanel && (
+                  <div className="mt-3 pt-3 border-t border-slate-800 space-y-1.5">
+                    <p className="text-slate-500 text-xs mb-2">Exclude from total:</p>
+                    {allExpenseCategories.length === 0 ? (
+                      <p className="text-slate-600 text-xs">No expenses this year.</p>
+                    ) : (
+                      allExpenseCategories.map((cat) => (
+                        <label key={cat} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={excludedFromExpenses.includes(cat)}
+                            onChange={(e) =>
+                              setExcludedFromExpenses((prev) =>
+                                e.target.checked ? [...prev, cat] : prev.filter((c) => c !== cat)
+                              )
+                            }
+                            className="accent-blue-500"
+                          />
+                          <span className="text-slate-300 text-xs flex-1">{cat}</span>
+                          <span className="text-slate-500 text-xs tabular-nums">
+                            ${fmt(expenseByCategory[cat])}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
 
