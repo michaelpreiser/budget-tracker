@@ -84,6 +84,7 @@ export default function Home() {
   const [showExclusionPanel, setShowExclusionPanel] = useState(false)
   const [excludedFromIncome, setExcludedFromIncome] = useState<string[]>([])
   const [showIncomeExclusionPanel, setShowIncomeExclusionPanel] = useState(false)
+  const [lastMonthTransactions, setLastMonthTransactions] = useState<Transaction[]>([])
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Persist excluded categories to localStorage
@@ -127,6 +128,8 @@ export default function Home() {
   // Initial load
   useEffect(() => {
     fetch('/api/auth/me').then((r) => r.json()).then((d) => { if (d.username) setUsername(d.username) })
+    const lastMonth = shiftMonth(currentMonth(), -1)
+    fetch(`/api/transactions?month=${lastMonth}`).then((r) => r.ok ? r.json() : []).then(setLastMonthTransactions).catch(() => {})
     Promise.all([fetchTransactions(), fetchCategories(), fetchBudgets()]).finally(() =>
       setLoading(false)
     )
@@ -271,6 +274,31 @@ export default function Home() {
   const net = adjustedIncome - adjustedExpenses
   const isProfit = net >= 0
 
+  // ── vs last month ──────────────────────────────────────────────────────────
+
+  const lastMonthExpenses = lastMonthTransactions
+    .filter((t) => t.type === 'expense')
+    .reduce((s, t) => s + t.amount, 0)
+
+  const lastMonthByCat = lastMonthTransactions
+    .filter((t) => t.type === 'expense')
+    .reduce((acc, t) => { acc[t.category] = (acc[t.category] ?? 0) + t.amount; return acc }, {} as Record<string, number>)
+
+  const spendingChangePct = lastMonthExpenses > 0
+    ? ((monthlyExpenses - lastMonthExpenses) / lastMonthExpenses) * 100
+    : null
+
+  const catChanges = Object.entries({ ...expenseByCategory, ...lastMonthByCat })
+    .map(([ cat]) => ({
+      cat,
+      change: (expenseByCategory[cat] ?? 0) - (lastMonthByCat[cat] ?? 0),
+    }))
+    .filter((c) => c.change !== 0)
+    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+
+  const topIncreases = catChanges.filter((c) => c.change > 0).slice(0, 3)
+  const topDecreases = catChanges.filter((c) => c.change < 0).slice(0, 3)
+
   // ── render ─────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -299,6 +327,12 @@ export default function Home() {
               className="ml-1 text-xs px-2.5 py-1 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
             >
               Yearly
+            </button>
+            <button
+              onClick={() => router.push('/insights')}
+              className="text-xs px-2.5 py-1 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+            >
+              Insights
             </button>
           </div>
 
@@ -504,6 +538,74 @@ export default function Home() {
             </p>
           </div>
         </div>
+
+        {/* ── vs Last Month ── */}
+        {lastMonthTransactions.length > 0 && (
+          <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
+            <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-3">vs Last Month</p>
+            <div className="flex flex-wrap gap-6">
+              {/* Spending change */}
+              <div className="flex-shrink-0">
+                <p className="text-slate-600 text-xs mb-1">Total Spending</p>
+                {spendingChangePct !== null ? (
+                  <>
+                    <p className={`text-xl font-bold tabular-nums ${spendingChangePct > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {spendingChangePct > 0 ? '▲' : '▼'} {Math.abs(spendingChangePct).toFixed(1)}%
+                    </p>
+                    <p className="text-slate-600 text-xs tabular-nums mt-0.5">
+                      ${fmt(Math.abs(monthlyExpenses - lastMonthExpenses))} {monthlyExpenses > lastMonthExpenses ? 'more' : 'less'}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-slate-500 text-sm">No data last month</p>
+                )}
+              </div>
+
+              {/* Top increases */}
+              {topIncreases.length > 0 && (
+                <div className="flex-shrink-0">
+                  <p className="text-slate-600 text-xs mb-1.5">Biggest increases</p>
+                  <div className="space-y-1">
+                    {topIncreases.map(({ cat, change }) => (
+                      <div key={cat} className="flex items-center gap-2 text-xs">
+                        <span className="text-red-400">▲</span>
+                        <span className="text-slate-400">{cat}</span>
+                        <span className="text-red-400 tabular-nums font-medium">+${fmt(change)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top decreases */}
+              {topDecreases.length > 0 && (
+                <div className="flex-shrink-0">
+                  <p className="text-slate-600 text-xs mb-1.5">Biggest decreases</p>
+                  <div className="space-y-1">
+                    {topDecreases.map(({ cat, change }) => (
+                      <div key={cat} className="flex items-center gap-2 text-xs">
+                        <span className="text-emerald-400">▼</span>
+                        <span className="text-slate-400">{cat}</span>
+                        <span className="text-emerald-400 tabular-nums font-medium">${fmt(Math.abs(change))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Net comparison */}
+              <div className="flex-shrink-0 ml-auto text-right">
+                <p className="text-slate-600 text-xs mb-1">Net this month</p>
+                <p className={`text-xl font-bold tabular-nums ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {isProfit ? '+' : '−'}${fmt(Math.abs(net))}
+                </p>
+                <p className="text-slate-600 text-xs mt-0.5 tabular-nums">
+                  ${fmt(adjustedIncome)} in · ${fmt(adjustedExpenses)} out
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Main two-column layout ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
