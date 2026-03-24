@@ -334,6 +334,12 @@ export default function Home() {
             >
               Insights
             </button>
+            <button
+              onClick={() => router.push('/reports')}
+              className="text-xs px-2.5 py-1 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition-colors"
+            >
+              Reports
+            </button>
           </div>
 
           {/* Month navigator */}

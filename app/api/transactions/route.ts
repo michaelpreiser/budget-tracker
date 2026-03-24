@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const month = searchParams.get('month')
     const year = searchParams.get('year')
+    const start = searchParams.get('start')
+    const end = searchParams.get('end')
 
     const result = month
       ? await db.execute({
@@ -24,6 +26,13 @@ export async function GET(request: NextRequest) {
                 WHERE user_id = ? AND strftime('%Y', date) = ?
                 ORDER BY date ASC, id ASC`,
           args: [user.userId, year],
+        })
+      : (start && end)
+      ? await db.execute({
+          sql: `SELECT * FROM transactions
+                WHERE user_id = ? AND date >= ? AND date <= ?
+                ORDER BY date DESC, id DESC`,
+          args: [user.userId, start, end],
         })
       : await db.execute({
           sql: 'SELECT * FROM transactions WHERE user_id = ? ORDER BY date DESC, id DESC',
