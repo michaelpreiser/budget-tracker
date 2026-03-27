@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import NavBar from '@/components/NavBar'
 import type { Transaction } from '@/types'
 
 const MONTHS = [
@@ -16,6 +17,8 @@ function fmt(n: number) {
 export default function TotalPage() {
   const router = useRouter()
   const [year, setYear] = useState(() => new Date().getFullYear())
+  const currentMonthNum = new Date().getMonth() + 1
+  const currentYearNum = new Date().getFullYear()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [excludedFromExpenses, setExcludedFromExpenses] = useState<string[]>(['Investing'])
@@ -98,7 +101,8 @@ export default function TotalPage() {
 
   // Monthly breakdown
   const monthlyData = MONTHS.map((name, i) => {
-    const mm = String(i + 1).padStart(2, '0')
+    const monthNum = i + 1
+    const mm = String(monthNum).padStart(2, '0')
     const key = `${year}-${mm}`
     const monthTx = transactions.filter((t) => t.date.startsWith(key))
     const income = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
@@ -117,7 +121,7 @@ export default function TotalPage() {
     }, 0)
     const adjIncome = income - exclIncome
     const adjExpenses = expenses - excl
-    return { name, income: adjIncome, expenses: adjExpenses, net: adjIncome - adjExpenses, hasData: monthTx.length > 0 }
+    return { name, monthNum, income: adjIncome, expenses: adjExpenses, net: adjIncome - adjExpenses, hasData: monthTx.length > 0 }
   })
 
   // Category breakdown sorted by amount
@@ -149,26 +153,7 @@ export default function TotalPage() {
               </svg>
             </div>
             <h1 className="text-sm font-bold tracking-tight text-slate-100 mr-3 hidden sm:block">Budget Tracker</h1>
-            <nav className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 gap-0.5">
-              {([
-                { label: 'Monthly', path: '/' },
-                { label: 'Yearly', path: '/total' },
-                { label: 'Insights', path: '/insights' },
-                { label: 'Reports', path: '/reports' },
-              ] as { label: string; path: string }[]).map(({ label, path }) => (
-                <button
-                  key={path}
-                  onClick={() => router.push(path)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    path === '/total'
-                      ? 'bg-slate-700 text-slate-100 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
+            <NavBar />
           </div>
 
           {/* Year navigator */}
@@ -334,28 +319,37 @@ export default function TotalPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyData.map(({ name, income, expenses, net: mNet, hasData }) => (
-                      <tr
-                        key={name}
-                        className={`border-b border-slate-800/50 last:border-0 ${hasData ? '' : 'opacity-30'}`}
-                      >
-                        <td className="px-5 py-3 text-slate-300">{name}</td>
-                        <td className="px-5 py-3 text-right tabular-nums text-emerald-400">
-                          {income > 0 ? `$${fmt(income)}` : '—'}
-                        </td>
-                        <td className="px-5 py-3 text-right tabular-nums text-red-400">
-                          {expenses > 0 ? `−$${fmt(expenses)}` : '—'}
-                        </td>
-                        <td className={`px-5 py-3 text-right tabular-nums font-medium ${
-                          !hasData ? 'text-slate-500' : mNet >= 0 ? 'text-emerald-400' : 'text-red-400'
-                        }`}>
-                          {hasData ? `${mNet >= 0 ? '+' : '−'}$${fmt(Math.abs(mNet))}` : '—'}
-                        </td>
-                      </tr>
-                    ))}
+                    {monthlyData.map(({ name, monthNum, income, expenses, net: mNet, hasData }) => {
+                      const isCurrentMonth = year === currentYearNum && monthNum === currentMonthNum
+                      return (
+                        <tr
+                          key={name}
+                          className="border-b border-slate-800/50 last:border-0"
+                          style={{
+                            opacity: hasData ? 1 : 0.35,
+                            fontWeight: isCurrentMonth ? 'bold' : undefined,
+                            borderLeft: isCurrentMonth ? '3px solid #06b6d4' : '3px solid transparent',
+                            backgroundColor: isCurrentMonth ? 'rgba(255,255,255,0.03)' : undefined,
+                          }}
+                        >
+                          <td className="px-5 py-3 text-slate-300">{name}</td>
+                          <td className="px-5 py-3 text-right tabular-nums text-emerald-400">
+                            {income > 0 ? `$${fmt(income)}` : '—'}
+                          </td>
+                          <td className="px-5 py-3 text-right tabular-nums text-red-400">
+                            {expenses > 0 ? `−$${fmt(expenses)}` : '—'}
+                          </td>
+                          <td className={`px-5 py-3 text-right tabular-nums font-medium ${
+                            !hasData ? 'text-slate-500' : mNet >= 0 ? 'text-emerald-400' : 'text-red-400'
+                          }`}>
+                            {hasData ? `${mNet >= 0 ? '+' : '−'}$${fmt(Math.abs(mNet))}` : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t border-slate-700 bg-slate-800/30">
+                    <tr className="border-t border-slate-700 bg-slate-800/30" style={{ fontSize: '1.05em' }}>
                       <td className="px-5 py-3 text-slate-300 font-semibold">Total</td>
                       <td className="px-5 py-3 text-right tabular-nums text-emerald-400 font-semibold">${fmt(adjustedIncome)}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-red-400 font-semibold">−${fmt(adjustedExpenses)}</td>

@@ -1,8 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { Category, Transaction } from '@/types'
 import { extractKeyword } from '@/lib/categorization'
+
+const CAT_COLORS = [
+  '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444',
+  '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#6366f1',
+  '#14b8a6', '#f43f5e',
+]
 
 interface Props {
   transactions: Transaction[]
@@ -72,6 +78,27 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
     setSaving(false)
     setEditingId(null)
   }
+
+  const categoryColorMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    const expCats = Array.from(new Set(transactions.filter(t => t.type === 'expense').map(t => t.category)))
+    expCats.forEach((cat, i) => { map[cat] = CAT_COLORS[i % CAT_COLORS.length] })
+    return map
+  }, [transactions])
+
+  const prevIdsRef = useRef<Set<number>>(new Set())
+  const [newIds, setNewIds] = useState<Set<number>>(new Set())
+
+  useEffect(() => {
+    const currentIds = new Set(transactions.map(t => t.id))
+    const added = new Set<number>()
+    currentIds.forEach(id => { if (!prevIdsRef.current.has(id)) added.add(id) })
+    if (added.size > 0) {
+      setNewIds(added)
+      setTimeout(() => setNewIds(new Set()), 300)
+    }
+    prevIdsRef.current = currentIds
+  }, [transactions])
 
   function saveRule(description: string, category: string) {
     const keyword = extractKeyword(description)
@@ -207,9 +234,12 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
               /* ── Normal row ── */
               <div
                 key={t.id}
-                className="group flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 transition-colors"
+                className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 transition-colors ${newIds.has(t.id) ? 'tx-slide-in' : ''}`}
               >
-                <span className={`h-2 w-2 rounded-full flex-shrink-0 ${t.type === 'income' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                <span
+                  className="h-2 w-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: t.type === 'income' ? '#10b981' : (categoryColorMap[t.category] ?? '#ef4444') }}
+                />
 
                 <span className="text-slate-500 text-xs w-[52px] flex-shrink-0 tabular-nums">
                   {fmtDate(t.date)}

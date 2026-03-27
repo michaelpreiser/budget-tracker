@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import NavBar from '@/components/NavBar'
 import type { Transaction, Budget } from '@/types'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -263,26 +264,7 @@ export default function ReportsPage() {
               </svg>
             </div>
             <h1 className="text-sm font-bold tracking-tight text-slate-100 mr-3 hidden sm:block">Budget Tracker</h1>
-            <nav className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 gap-0.5">
-              {([
-                { label: 'Monthly', path: '/' },
-                { label: 'Yearly', path: '/total' },
-                { label: 'Insights', path: '/insights' },
-                { label: 'Reports', path: '/reports' },
-              ] as { label: string; path: string }[]).map(({ label, path }) => (
-                <button
-                  key={path}
-                  onClick={() => router.push(path)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    path === '/reports'
-                      ? 'bg-slate-700 text-slate-100 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
+            <NavBar />
           </div>
         </div>
       </header>

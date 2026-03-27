@@ -36,14 +36,22 @@ export default function InputBar({ categories, onAdd }: Props) {
 
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* Income / Expense toggle */}
-        <div className="flex rounded-xl overflow-hidden border border-slate-700">
+        <div className="relative flex rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+          {/* Sliding pill */}
+          <div
+            aria-hidden
+            className="absolute inset-y-0 w-1/2 rounded-xl"
+            style={{
+              transform: type === 'income' ? 'translateX(100%)' : 'translateX(0)',
+              backgroundColor: type === 'expense' ? '#ef4444' : '#10b981',
+              transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          />
           <button
             type="button"
             onClick={() => setType('expense')}
-            className={`flex-1 py-2.5 text-sm font-semibold transition-all duration-150 ${
-              type === 'expense'
-                ? 'bg-red-600 text-white shadow-inner'
-                : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+            className={`relative z-10 flex-1 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+              type === 'expense' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             − Expense
@@ -51,10 +59,8 @@ export default function InputBar({ categories, onAdd }: Props) {
           <button
             type="button"
             onClick={() => setType('income')}
-            className={`flex-1 py-2.5 text-sm font-semibold transition-all duration-150 ${
-              type === 'income'
-                ? 'bg-emerald-600 text-white shadow-inner'
-                : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+            className={`relative z-10 flex-1 py-2.5 text-sm font-semibold transition-colors duration-200 ${
+              type === 'income' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             + Income

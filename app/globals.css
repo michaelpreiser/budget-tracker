@@ -33,3 +33,25 @@ input[type='number']::-webkit-outer-spin-button {
 input[type='number'] {
   -moz-appearance: textfield;
 }
+
+/* Enhancement 2 — transaction row slide-in */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes slideInRight {
+    from { transform: translateX(24px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  .tx-slide-in {
+    animation: slideInRight 0.2s ease-out both;
+  }
+}
+
+/* Enhancement 3 — over-budget bar pulse */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes btBarPulse {
+    0%, 100% { box-shadow: none; }
+    50% { box-shadow: 0 0 6px #ef4444; }
+  }
+  .bt-bar-pulse {
+    animation: btBarPulse 1.5s ease-in-out infinite;
+  }
+}

@@ -304,10 +304,6 @@ export default function BudgetTargets({
                 const isOver = !isGoal && remaining !== null && remaining < 0
                 const isReached = isGoal && remaining !== null && remaining <= 0
 
-                let barColor: string
-                if (isGoal) barColor = isReached ? 'bg-emerald-500' : progress > 60 ? 'bg-blue-400' : 'bg-slate-500'
-                else barColor = isOver ? 'bg-red-500' : progress > 80 ? 'bg-amber-500' : 'bg-emerald-500'
-
                 let otherLabel = ''
                 if (state.value) {
                   if (state.mode === 'amount' && targetPct !== null) otherLabel = `${targetPct.toFixed(1)}%`
@@ -392,7 +388,22 @@ export default function BudgetTargets({
                       {hasTarget ? (
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden min-w-[60px]">
-                            <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${progress}%` }} />
+                            <div
+                              className={`h-full rounded-full ${!isGoal && actual > (targetAmt ?? 0) ? 'bt-bar-pulse' : ''}`}
+                              style={{
+                                width: `${progress}%`,
+                                transition: 'background-color 0.4s ease, width 0.5s ease',
+                                backgroundColor: isGoal
+                                  ? (isReached ? '#10b981' : progress > 60 ? '#3b82f6' : '#64748b')
+                                  : actual > (targetAmt ?? 0)
+                                  ? '#ef4444'
+                                  : (actual / (targetAmt ?? 1)) * 100 > 85
+                                  ? '#ef4444'
+                                  : (actual / (targetAmt ?? 1)) * 100 > 60
+                                  ? '#f59e0b'
+                                  : '#10b981',
+                              }}
+                            />
                           </div>
                           <span className="text-slate-600 text-xs tabular-nums w-8 text-right">{Math.round(progress)}%</span>
                         </div>

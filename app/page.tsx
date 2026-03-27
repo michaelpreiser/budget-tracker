@@ -10,6 +10,7 @@ import CategoryManager from '@/components/CategoryManager'
 import StatementImport from '@/components/StatementImport'
 import AccountModal from '@/components/AccountModal'
 import CategoryRules from '@/components/CategoryRules'
+import NavBar from '@/components/NavBar'
 import type { Budget, Category, Transaction } from '@/types'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -37,6 +38,27 @@ function fmt(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+// ─── useCountUp hook ─────────────────────────────────────────────────────────
+
+function useCountUp(target: number, deps: unknown[], duration = 800) {
+  const [display, setDisplay] = useState(0)
+  useEffect(() => {
+    const start = performance.now()
+    const from = 0
+    function tick(now: number) {
+      const elapsed = now - start
+      const progress = Math.min(elapsed / duration, 1)
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplay(from + (target - from) * eased)
+      if (progress < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+  return display
+}
+
 // ─── stat card ───────────────────────────────────────────────────────────────
 
 function StatCard({
@@ -62,6 +84,114 @@ function StatCard({
       <p className={`font-bold tabular-nums leading-none ${large ? 'text-3xl' : 'text-2xl'} ${colour}`}>
         {prefix}${fmt(value)}
       </p>
+    </div>
+  )
+}
+
+// ─── health score ────────────────────────────────────────────────────────────
+
+function HealthScore({ income, expenses, net, budgets, transactions, lastMonthNet }: {
+  income: number, expenses: number, net: number,
+  budgets: Budget[], transactions: Transaction[], lastMonthNet: number
+}) {
+  // Score calculation
+  let savingsScore: number | null = null
+  if (income > 0) {
+    const savingsRate = (net / income) * 100
+    savingsScore = Math.min(Math.max((savingsRate / 20) * 100, 0), 100)
+  }
+  const budgetScores: number[] = []
+  for (const b of budgets) {
+    if (!b.amount || b.is_goal) continue
+    const spent = transactions
+      .filter((t) => t.type === 'expense' && t.category === b.category)
+      .reduce((s, t) => s + t.amount, 0)
+    budgetScores.push(spent <= b.amount ? 100 : 0)
+  }
+  const budgetScore = budgetScores.length > 0
+    ? budgetScores.reduce((a, b) => a + b, 0) / budgetScores.length
+    : null
+  let trendScore: number | null = null
+  if (lastMonthNet !== 0) {
+    const improvement = net - lastMonthNet
+    if (improvement >= 0) trendScore = 100
+    else if (improvement > -Math.abs(lastMonthNet) * 0.1) trendScore = 50
+    else trendScore = 0
+  }
+  const factors = [savingsScore, budgetScore, trendScore].filter((f) => f !== null) as number[]
+  const score = factors.length > 0
+    ? Math.round(factors.reduce((a, b) => a + b, 0) / factors.length)
+    : 50
+
+  const ringColor = score >= 71 ? '#10b981' : score >= 41 ? '#f59e0b' : '#ef4444'
+  const radius = 36
+  const circ = 2 * Math.PI * radius
+  const [animScore, setAnimScore] = useState(0)
+
+  useEffect(() => {
+    const start = performance.now()
+    const duration = 1000
+    function tick(now: number) {
+      const progress = Math.min((now - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setAnimScore(score * eased)
+      if (progress < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }, [score])
+
+  const dashoffset = circ * (1 - animScore / 100)
+
+  return (
+    <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
+      <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-3">Financial Health</p>
+      <div className="flex items-center gap-6">
+        {/* Ring */}
+        <svg width="88" height="88" viewBox="0 0 88 88" className="flex-shrink-0">
+          {/* Track */}
+          <circle cx="44" cy="44" r={radius} fill="none" stroke="#1e293b" strokeWidth="8" />
+          {/* Progress */}
+          <circle
+            cx="44" cy="44" r={radius}
+            fill="none"
+            stroke={ringColor}
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={circ}
+            strokeDashoffset={dashoffset}
+            transform="rotate(-90 44 44)"
+            style={{ transition: 'stroke 0.4s ease' }}
+          />
+          {/* Score label */}
+          <text x="44" y="40" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="18" fontWeight="bold" dy="4">
+            {Math.round(animScore)}
+          </text>
+        </svg>
+        {/* Labels */}
+        <div>
+          <p className="text-slate-200 font-semibold text-sm mb-1">Score: {score}/100</p>
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {savingsScore !== null && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                Savings: {Math.round(savingsScore)}
+              </span>
+            )}
+            {budgetScore !== null && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                Budget: {Math.round(budgetScore)}
+              </span>
+            )}
+            {trendScore !== null && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                Trend: {trendScore}
+              </span>
+            )}
+          </div>
+          {factors.length === 0 && (
+            <p className="text-slate-600 text-xs">Add transactions to calculate score</p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -274,6 +404,14 @@ export default function Home() {
   const net = adjustedIncome - adjustedExpenses
   const isProfit = net >= 0
 
+  // ── animated counters ──────────────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const incomeDisplay = useCountUp(adjustedIncome, [adjustedIncome, month])
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const expDisplay = useCountUp(adjustedExpenses, [adjustedExpenses, month])
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const netDisplay = useCountUp(Math.abs(net), [net, month])
+
   // ── vs last month ──────────────────────────────────────────────────────────
 
   const lastMonthExpenses = lastMonthTransactions
@@ -345,26 +483,7 @@ export default function Home() {
             </h1>
 
             {/* Nav pills */}
-            <nav className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 gap-0.5">
-              {[
-                { label: 'Monthly', path: '/', active: true },
-                { label: 'Yearly', path: '/total', active: false },
-                { label: 'Insights', path: '/insights', active: false },
-                { label: 'Reports', path: '/reports', active: false },
-              ].map(({ label, path, active }) => (
-                <button
-                  key={path}
-                  onClick={() => router.push(path)}
-                  className={`relative px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    active
-                      ? 'bg-slate-700 text-slate-100 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
+            <NavBar />
           </div>
 
           {/* Month navigator */}
@@ -454,7 +573,7 @@ export default function Home() {
         {/* ── Stats row ── */}
         <div className="grid grid-cols-3 gap-4">
           {/* Custom Income card with exclusion controls */}
-          <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
+          <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl" style={{ borderTop: '3px solid #10b981' }}>
             <div className="flex items-center justify-between mb-1">
               <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">Income</p>
               <button
@@ -471,7 +590,7 @@ export default function Home() {
             </div>
 
             <p className="text-2xl font-bold tabular-nums leading-none text-emerald-400">
-              ${fmt(adjustedIncome)}
+              ${fmt(incomeDisplay)}
             </p>
 
             {!showIncomeExclusionPanel && activeIncomeExclusions.length > 0 && (
@@ -510,7 +629,7 @@ export default function Home() {
           </div>
 
           {/* Custom Expenses card with exclusion controls */}
-          <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
+          <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl" style={{ borderTop: '3px solid #ef4444' }}>
             <div className="flex items-center justify-between mb-1">
               <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">Expenses</p>
               <button
@@ -527,7 +646,7 @@ export default function Home() {
             </div>
 
             <p className="text-2xl font-bold tabular-nums leading-none text-red-400">
-              −${fmt(adjustedExpenses)}
+              −${fmt(expDisplay)}
             </p>
 
             {!showExclusionPanel && activeExclusions.length > 0 && (
@@ -564,7 +683,7 @@ export default function Home() {
               </div>
             )}
           </div>
-          <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
+          <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl" style={{ borderTop: '3px solid #06b6d4' }}>
             <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">
               Net {isProfit ? 'Profit' : 'Loss'}
             </p>
@@ -573,7 +692,7 @@ export default function Home() {
                 isProfit ? 'text-emerald-400' : 'text-red-400'
               }`}
             >
-              {isProfit ? '+' : '−'}${fmt(Math.abs(net))}
+              {isProfit ? '+' : '−'}${fmt(netDisplay)}
             </p>
           </div>
         </div>
@@ -645,6 +764,17 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* ── Financial Health ── */}
+        <HealthScore
+          income={adjustedIncome}
+          expenses={adjustedExpenses}
+          net={net}
+          budgets={budgets}
+          transactions={transactions}
+          lastMonthNet={lastMonthTransactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0)
+            - lastMonthTransactions.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0)}
+        />
 
         {/* ── Main two-column layout ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
