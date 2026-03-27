@@ -239,19 +239,55 @@ export default function ReportsPage() {
   // ─── render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => router.push('/')}
-            className="text-slate-400 hover:text-slate-200 text-sm transition-colors"
-          >
-            ← Dashboard
-          </button>
-          <h1 className="text-xl font-bold text-slate-100">Reports & Export</h1>
+      <header className="sticky top-0 z-20 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-0">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4 h-14">
+          {/* Logo + Nav */}
+          <div className="flex items-center gap-1">
+            <div className="relative flex items-center justify-center w-8 h-8 mr-2 flex-shrink-0">
+              <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 opacity-20 animate-pulse" style={{ animationDuration: '3s' }} />
+              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 relative z-10" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 9C3 7.34315 4.34315 6 6 6H18C19.6569 6 21 7.34315 21 9V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18V9Z" stroke="url(#logoGradR)" strokeWidth="1.5"/>
+                <path d="M3 9H21" stroke="url(#logoGradR)" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M7 3L7 6" stroke="url(#logoGradR)" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M17 3L17 6" stroke="url(#logoGradR)" strokeWidth="1.5" strokeLinecap="round"/>
+                <circle cx="8" cy="14" r="1" fill="url(#logoGradR)"/>
+                <circle cx="12" cy="14" r="1" fill="url(#logoGradR)"/>
+                <circle cx="16" cy="14" r="1" fill="url(#logoGradR)"/>
+                <defs>
+                  <linearGradient id="logoGradR" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#60a5fa"/><stop offset="1" stopColor="#a78bfa"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <h1 className="text-sm font-bold tracking-tight text-slate-100 mr-3 hidden sm:block">Budget Tracker</h1>
+            <nav className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 gap-0.5">
+              {([
+                { label: 'Monthly', path: '/' },
+                { label: 'Yearly', path: '/total' },
+                { label: 'Insights', path: '/insights' },
+                { label: 'Reports', path: '/reports' },
+              ] as { label: string; path: string }[]).map(({ label, path }) => (
+                <button
+                  key={path}
+                  onClick={() => router.push(path)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    path === '/reports'
+                      ? 'bg-slate-700 text-slate-100 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/60'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </div>
         </div>
+      </header>
 
+      <div className="max-w-5xl mx-auto p-4 md:p-6">
         {/* Tab bar */}
         <div className="flex gap-1 mb-6 bg-slate-900 border border-slate-700/50 rounded-xl p-1 w-fit">
           {([
@@ -767,3 +803,4 @@ export default function ReportsPage() {
     </div>
   )
 }
+
