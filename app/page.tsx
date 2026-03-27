@@ -780,8 +780,8 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left column */}
           <div className="flex flex-col gap-6">
-            <StatementImport categories={categories} onImportDone={fetchTransactions} />
             <Dashboard transactions={transactions} />
+            <StatementImport categories={categories} onImportDone={fetchTransactions} />
             <InputBar categories={categories} onAdd={addTransaction} />
           </div>
 
