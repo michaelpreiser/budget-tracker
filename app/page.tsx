@@ -258,12 +258,16 @@ export default function Home() {
   // Initial load
   useEffect(() => {
     fetch('/api/auth/me').then((r) => r.json()).then((d) => { if (d.username) setUsername(d.username) })
-    const lastMonth = shiftMonth(currentMonth(), -1)
-    fetch(`/api/transactions?month=${lastMonth}`).then((r) => r.ok ? r.json() : []).then(setLastMonthTransactions).catch(() => {})
     Promise.all([fetchTransactions(), fetchCategories(), fetchBudgets()]).finally(() =>
       setLoading(false)
     )
   }, [fetchTransactions, fetchCategories, fetchBudgets])
+
+  // Re-fetch previous month whenever selected month changes
+  useEffect(() => {
+    const prevMonth = shiftMonth(month, -1)
+    fetch(`/api/transactions?month=${prevMonth}`).then((r) => r.ok ? r.json() : []).then(setLastMonthTransactions).catch(() => {})
+  }, [month])
 
   // Close user menu on outside click
   useEffect(() => {
@@ -698,9 +702,11 @@ export default function Home() {
         </div>
 
         {/* ── vs Last Month ── */}
-        {lastMonthTransactions.length > 0 && (
+        {transactions.length > 0 && lastMonthTransactions.length > 0 && (
           <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
-            <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-3">vs Last Month</p>
+            <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-3">
+              vs {formatMonth(shiftMonth(month, -1))}
+            </p>
             <div className="flex flex-wrap gap-6">
               {/* Spending change */}
               <div className="flex-shrink-0">
@@ -766,7 +772,7 @@ export default function Home() {
         )}
 
         {/* ── Financial Health ── */}
-        <HealthScore
+        {transactions.length > 0 && <HealthScore
           income={adjustedIncome}
           expenses={adjustedExpenses}
           net={net}
@@ -774,7 +780,7 @@ export default function Home() {
           transactions={transactions}
           lastMonthNet={lastMonthTransactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0)
             - lastMonthTransactions.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0)}
-        />
+        />}
 
         {/* ── Main two-column layout ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
