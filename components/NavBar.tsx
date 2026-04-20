@@ -4,8 +4,8 @@ import { useRouter, usePathname } from 'next/navigation'
 
 const NAV_ITEMS = [
   { label: 'Monthly', path: '/' },
-  { label: 'Yearly', path: '/total' },
   { label: 'Insights', path: '/insights' },
+  { label: 'Yearly', path: '/total' },
   { label: 'Reports', path: '/reports' },
 ]
 
