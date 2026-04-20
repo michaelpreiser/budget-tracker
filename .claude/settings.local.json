@@ -13,7 +13,10 @@
       "Bash(npm install recharts 2>&1 | tail -5)",
       "Bash(git add app/page.tsx && git commit -m \"$\\(cat <<'EOF'\nImprove header UI: animated SVG logo, unified nav pill bar, avatar initials in user menu\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -5)",
       "Bash(git add app/total/page.tsx app/insights/page.tsx app/reports/page.tsx && git commit -m \"$\\(cat <<'EOF'\nAdd consistent nav bar to Yearly, Insights, and Reports pages\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)",
-      "Bash(git add -A && git commit -m \"$\\(cat <<'EOF'\nAdd UI enhancements: animated cards, color-coded dots, dynamic budget bars, yearly row polish, sliding nav, toggle animation, health score widget\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)"
+      "Bash(git add -A && git commit -m \"$\\(cat <<'EOF'\nAdd UI enhancements: animated cards, color-coded dots, dynamic budget bars, yearly row polish, sliding nav, toggle animation, health score widget\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)",
+      "Bash(npm run build 2>&1 | tail -5 && git add app/page.tsx && git commit -m \"$\\(cat <<'EOF'\nMove Add Transaction below Import Bank Statement and Category Breakdown\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)",
+      "Bash(npm run build 2>&1 | tail -5 && git add app/page.tsx && git commit -m \"$\\(cat <<'EOF'\nReorder left column: Category Breakdown → Import → Add Transaction\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)",
+      "Bash(git add -A && git commit -m \"$\\(cat <<'EOF'\nUnify header across all pages via shared AppHeader component \\(same width, logo, nav, user menu everywhere\\)\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)"
     ]
   }
 }
