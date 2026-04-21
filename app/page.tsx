@@ -117,7 +117,20 @@ function HealthScore({ income, expenses, net, budgets, transactions, lastMonthNe
     else if (improvement > -Math.abs(lastMonthNet) * 0.1) trendScore = 50
     else trendScore = 0
   }
-  const factors = [savingsScore, budgetScore, trendScore].filter((f) => f !== null) as number[]
+  // Factor 4: Goal adherence — proportional progress toward each savings/contribution goal
+  const goalScores: number[] = []
+  for (const b of budgets) {
+    if (!b.amount || !b.is_goal) continue
+    const contributed = transactions
+      .filter((t) => t.category === b.category)
+      .reduce((s, t) => s + t.amount, 0)
+    goalScores.push(Math.min((contributed / b.amount) * 100, 100))
+  }
+  const goalScore = goalScores.length > 0
+    ? goalScores.reduce((a, b) => a + b, 0) / goalScores.length
+    : null
+
+  const factors = [savingsScore, budgetScore, trendScore, goalScore].filter((f) => f !== null) as number[]
   const score = factors.length > 0
     ? Math.round(factors.reduce((a, b) => a + b, 0) / factors.length)
     : 50
@@ -183,6 +196,11 @@ function HealthScore({ income, expenses, net, budgets, transactions, lastMonthNe
             {trendScore !== null && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
                 Trend: {trendScore}
+              </span>
+            )}
+            {goalScore !== null && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                Goals: {Math.round(goalScore)}
               </span>
             )}
           </div>
