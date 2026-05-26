@@ -52,12 +52,27 @@ export function extractKeyword(description: string): string {
 
 /**
  * Find the best matching rule for a description.
- * Returns the rule with the longest (most specific) keyword match, or null.
+ *
+ * Matching priority:
+ *   1. Exact match on the extracted keyword (most reliable)
+ *   2. Whole-word substring match using \b word boundaries
+ *      — prevents "AL" matching "ALDI", "BP" matching "TBPAINT", etc.
+ *   3. Among multiple word-boundary matches, longest keyword wins (most specific)
  */
 export function applyRules(description: string, rules: CategoryRule[]): CategoryRule | null {
   if (!description || rules.length === 0) return null
   const upper = description.toUpperCase()
-  const matches = rules.filter((r) => upper.includes(r.keyword.toUpperCase()))
-  if (matches.length === 0) return null
-  return matches.reduce((best, r) => (r.keyword.length > best.keyword.length ? r : best))
+
+  // Priority 1: exact match on the extracted keyword
+  const extracted = extractKeyword(description).toUpperCase()
+  const exactMatch = rules.find((r) => r.keyword.toUpperCase() === extracted)
+  if (exactMatch) return exactMatch
+
+  // Priority 2: whole-word matches only (no partial-word substring matches)
+  const wordMatches = rules.filter((r) => {
+    const escaped = r.keyword.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`\\b${escaped}\\b`).test(upper)
+  })
+  if (wordMatches.length === 0) return null
+  return wordMatches.reduce((best, r) => (r.keyword.length > best.keyword.length ? r : best))
 }

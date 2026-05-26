@@ -26,12 +26,13 @@ export async function POST(request: NextRequest) {
 
   const kw = keyword.trim().toUpperCase()
 
-  // Upsert: update category + bump match_count if keyword already exists
+  // Upsert: only overwrite the category if the existing rule is weak (match_count <= 2).
+  // This prevents a single accidental mis-categorization from overriding a well-used rule.
   await db.execute({
     sql: `INSERT INTO category_rules (user_id, keyword, category, match_count)
           VALUES (?, ?, ?, 1)
           ON CONFLICT(user_id, keyword) DO UPDATE SET
-            category = excluded.category,
+            category = CASE WHEN match_count <= 2 THEN excluded.category ELSE category END,
             match_count = match_count + 1`,
     args: [user.userId, kw, category],
   })
