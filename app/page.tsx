@@ -9,6 +9,7 @@ import BudgetTargets from '@/components/BudgetTargets'
 import CategoryManager from '@/components/CategoryManager'
 import StatementImport from '@/components/StatementImport'
 import CategoryRules from '@/components/CategoryRules'
+import EventSavingsPlanner from '@/components/EventSavingsPlanner'
 import AppHeader from '@/components/AppHeader'
 import type { Budget, Category, Transaction } from '@/types'
 
@@ -709,6 +710,9 @@ export default function Home() {
             onClearAll={clearTransactions}
           />
         </div>
+
+        {/* ── Event Savings Planner ── */}
+        <EventSavingsPlanner />
 
         {/* ── Budget targets ── */}
         <BudgetTargets
