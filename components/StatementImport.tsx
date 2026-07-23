@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import type { Category } from '@/types'
+import type { Category, SavingsBucket } from '@/types'
 import { applyRules, extractKeyword, type CategoryRule } from '@/lib/categorization'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -11,8 +11,9 @@ interface ParsedRow {
   date: string
   description: string
   amount: number
-  type: 'income' | 'expense'
+  type: 'income' | 'expense' | 'savings'
   category: string
+  bucket_id: number | null
   isDuplicate: boolean
   skip: boolean
   matchedByRule: boolean
@@ -20,6 +21,7 @@ interface ParsedRow {
 
 interface Props {
   categories: Category[]
+  savingsBuckets: SavingsBucket[]
   onImportDone: () => void
 }
 
@@ -239,7 +241,7 @@ function detectColumns(grid: string[][]): DetectResult | null {
 
 let nextId = 0
 
-export default function StatementImport({ categories, onImportDone }: Props) {
+export default function StatementImport({ categories, savingsBuckets, onImportDone }: Props) {
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState('')
@@ -282,13 +284,18 @@ export default function StatementImport({ categories, onImportDone }: Props) {
         const category = matchedRule
           ? matchedRule.category
           : autoCategory(t.description, categories)
+        // Auto-set savings type when category is Savings and original type is expense
+        const isSavingsCategory = category === 'Savings'
+        const inferredType: 'income' | 'expense' | 'savings' =
+          isSavingsCategory && t.type === 'expense' ? 'savings' : t.type
         return {
           id: nextId++,
           date: t.date,
           description: t.description,
           amount: t.amount,
-          type: t.type,
+          type: inferredType,
           category,
+          bucket_id: null,
           isDuplicate: t.isDuplicate,
           skip: t.isDuplicate,
           matchedByRule: !!matchedRule,
@@ -385,7 +392,7 @@ export default function StatementImport({ categories, onImportDone }: Props) {
   }, [])
 
   const toggleAll = useCallback((skip: boolean) => setRows((prev) => prev.map((r) => ({ ...r, skip }))), [])
-  const setAllType = useCallback((type: 'income' | 'expense') => setRows((prev) => prev.map((r) => ({ ...r, type }))), [])
+  const setAllType = useCallback((type: 'income' | 'expense' | 'savings') => setRows((prev) => prev.map((r) => ({ ...r, type, bucket_id: type !== 'savings' ? null : r.bucket_id }))), [])
 
   function saveRule(description: string, category: string) {
     const keyword = extractKeyword(description)
@@ -420,6 +427,7 @@ export default function StatementImport({ categories, onImportDone }: Props) {
             category: r.category,
             notes: r.description,
             date: r.date,
+            bucket_id: r.bucket_id ?? null,
           })),
         }),
       })
@@ -602,6 +610,7 @@ export default function StatementImport({ categories, onImportDone }: Props) {
             <div className="flex gap-2 text-xs shrink-0 flex-wrap justify-end">
               <button onClick={() => setAllType('expense')} className="px-2 py-0.5 rounded-lg bg-red-900/50 text-red-300 hover:bg-red-900 transition-colors font-semibold">All Expense</button>
               <button onClick={() => setAllType('income')} className="px-2 py-0.5 rounded-lg bg-emerald-900/50 text-emerald-300 hover:bg-emerald-900 transition-colors font-semibold">All Income</button>
+              <button onClick={() => setAllType('savings')} className="px-2 py-0.5 rounded-lg bg-blue-900/50 text-blue-300 hover:bg-blue-900 transition-colors font-semibold">All Savings</button>
               <span className="text-slate-700">|</span>
               <button onClick={() => toggleAll(false)} className="text-blue-400 hover:text-blue-300 transition-colors">Select all</button>
               <span className="text-slate-700">|</span>
@@ -640,14 +649,22 @@ export default function StatementImport({ categories, onImportDone }: Props) {
                   </span>
                 )}
                 <button
-                  onClick={() => update(row.id, 'type', row.type === 'expense' ? 'income' : 'expense')}
+                  onClick={() => {
+                    const next: Record<string, 'income' | 'expense' | 'savings'> = { expense: 'savings', savings: 'income', income: 'expense' }
+                    const newType = next[row.type] ?? 'expense'
+                    update(row.id, 'type', newType)
+                    if (newType !== 'savings') update(row.id, 'bucket_id', null)
+                  }}
                   className={`shrink-0 px-2 py-0.5 rounded-lg font-semibold transition-colors ${
                     row.type === 'income'
                       ? 'bg-emerald-900/60 text-emerald-300 hover:bg-emerald-900'
+                      : row.type === 'savings'
+                      ? 'bg-blue-900/60 text-blue-300 hover:bg-blue-900'
                       : 'bg-red-900/60 text-red-300 hover:bg-red-900'
                   }`}
+                  title="Click to cycle: Expense → Savings → Income"
                 >
-                  {row.type === 'income' ? '+' : '−'}
+                  {row.type === 'income' ? '+' : row.type === 'savings' ? '⇑' : '−'}
                 </button>
                 <span className={`shrink-0 tabular-nums w-20 text-right font-semibold ${row.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
                   ${row.amount.toFixed(2)}
@@ -660,9 +677,12 @@ export default function StatementImport({ categories, onImportDone }: Props) {
                 <select
                   value={row.category}
                   onChange={(e) => {
-                    update(row.id, 'category', e.target.value)
+                    const newCat = e.target.value
+                    update(row.id, 'category', newCat)
                     update(row.id, 'matchedByRule', false)
-                    saveRule(row.description, e.target.value)
+                    saveRule(row.description, newCat)
+                    // Auto-switch to savings type when Savings category selected
+                    if (newCat === 'Savings' && row.type === 'expense') update(row.id, 'type', 'savings')
                   }}
                   className="shrink-0 bg-slate-700 border border-slate-600 rounded-lg px-1.5 py-0.5 text-slate-200 focus:outline-none focus:border-blue-500 w-32"
                 >
@@ -671,6 +691,18 @@ export default function StatementImport({ categories, onImportDone }: Props) {
                     <option key={c.id} value={c.name}>{c.name}</option>
                   ))}
                 </select>
+                {row.type === 'savings' && savingsBuckets.length > 0 && (
+                  <select
+                    value={row.bucket_id ?? ''}
+                    onChange={(e) => update(row.id, 'bucket_id', e.target.value ? Number(e.target.value) : null)}
+                    className="shrink-0 bg-blue-950/60 border border-blue-700/50 rounded-lg px-1.5 py-0.5 text-blue-200 focus:outline-none focus:border-blue-500 w-28 text-xs"
+                  >
+                    <option value="">Bucket…</option>
+                    {savingsBuckets.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             ))}
           </div>

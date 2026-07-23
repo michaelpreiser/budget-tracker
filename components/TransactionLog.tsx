@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import type { Category, Transaction } from '@/types'
+import type { Category, Transaction, SavingsBucket } from '@/types'
 import { extractKeyword } from '@/lib/categorization'
 
 const CAT_COLORS = [
@@ -13,6 +13,7 @@ const CAT_COLORS = [
 interface Props {
   transactions: Transaction[]
   categories: Category[]
+  savingsBuckets: SavingsBucket[]
   onDelete: (id: number) => Promise<void>
   onEdit: (id: number, t: Omit<Transaction, 'id'>) => Promise<void>
   onClearAll: () => Promise<void>
@@ -23,19 +24,20 @@ function fmtDate(d: string) {
   return new Date(y, m - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function TransactionLog({ transactions, categories, onDelete, onEdit, onClearAll }: Props) {
+type TxType = 'income' | 'expense' | 'savings'
+
+export default function TransactionLog({ transactions, categories, savingsBuckets, onDelete, onEdit, onClearAll }: Props) {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
 
-  // Edit form state
   const [editAmount, setEditAmount] = useState('')
-  const [editType, setEditType] = useState<'income' | 'expense'>('expense')
+  const [editType, setEditType] = useState<TxType>('expense')
   const [editCategory, setEditCategory] = useState('')
+  const [editBucketId, setEditBucketId] = useState<number | ''>('')
   const [editNotes, setEditNotes] = useState('')
   const [editDate, setEditDate] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Inline note editing
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
@@ -47,7 +49,7 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
 
   async function saveNote(t: Transaction) {
     setSavingNote(true)
-    await onEdit(t.id, { amount: t.amount, type: t.type, category: t.category, notes: noteText, date: t.date })
+    await onEdit(t.id, { amount: t.amount, type: t.type, category: t.category, notes: noteText, date: t.date, bucket_id: t.bucket_id })
     setSavingNote(false)
     setEditingNoteId(null)
   }
@@ -57,13 +59,12 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
     setEditAmount(String(t.amount))
     setEditType(t.type)
     setEditCategory(t.category)
+    setEditBucketId(t.bucket_id ? t.bucket_id : '')
     setEditNotes(t.notes)
     setEditDate(t.date)
   }
 
-  function cancelEdit() {
-    setEditingId(null)
-  }
+  function cancelEdit() { setEditingId(null) }
 
   async function handleSave(id: number) {
     if (!editAmount || !editCategory || !editDate) return
@@ -74,6 +75,7 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
       category: editCategory,
       notes: editNotes,
       date: editDate,
+      bucket_id: editType === 'savings' && editBucketId !== '' ? editBucketId : null,
     })
     setSaving(false)
     setEditingId(null)
@@ -117,6 +119,211 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
     setDeletingId(null)
   }
 
+  function dotColor(t: Transaction): string {
+    if (t.type === 'income') return '#10b981'
+    if (t.type === 'savings') return '#3b82f6'
+    return categoryColorMap[t.category] ?? '#ef4444'
+  }
+
+  function amountColor(t: Transaction): string {
+    if (t.type === 'income') return 'text-emerald-400'
+    if (t.type === 'savings') return 'text-blue-400'
+    return 'text-red-400'
+  }
+
+  function amountPrefix(t: Transaction): string {
+    if (t.type === 'income') return '+'
+    if (t.type === 'savings') return '⇑'
+    return '−'
+  }
+
+  const nonSavingsTx = transactions.filter(t => t.type !== 'savings')
+  const savingsTx = transactions.filter(t => t.type === 'savings')
+
+  function renderRow(t: Transaction) {
+    if (editingId === t.id) {
+      return (
+        <div
+          key={t.id}
+          className="rounded-xl bg-slate-800 border border-blue-500/40 p-3 space-y-2"
+        >
+          {/* Row 1: type toggle + amount + date */}
+          <div className="flex gap-2">
+            <div className="flex rounded-lg overflow-hidden border border-slate-700 shrink-0">
+              <button
+                type="button"
+                onClick={() => setEditType('expense')}
+                className={`px-2 py-1.5 text-xs font-semibold transition-colors ${editType === 'expense' ? 'bg-red-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}
+              >
+                − Exp
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEditType('savings'); }}
+                className={`px-2 py-1.5 text-xs font-semibold transition-colors ${editType === 'savings' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}
+              >
+                ⇑ Sav
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditType('income')}
+                className={`px-2 py-1.5 text-xs font-semibold transition-colors ${editType === 'income' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'}`}
+              >
+                + Inc
+              </button>
+            </div>
+            <div className="relative flex-1">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">$</span>
+              <input
+                type="number"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                step="0.01" min="0.01"
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-5 pr-2 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <input
+              type="date"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
+              className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-blue-500 shrink-0"
+            />
+          </div>
+
+          {/* Row 2: category + notes */}
+          <div className="flex gap-2">
+            <select
+              value={editCategory}
+              onChange={(e) => setEditCategory(e.target.value)}
+              className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-blue-500 shrink-0 w-36"
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              placeholder="Notes"
+              maxLength={200}
+              className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {/* Savings bucket selector */}
+          {editType === 'savings' && savingsBuckets.length > 0 && (
+            <select
+              value={editBucketId}
+              onChange={(e) => setEditBucketId(e.target.value ? Number(e.target.value) : '')}
+              className="w-full bg-slate-700 border border-blue-700/50 rounded-lg px-2 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+            >
+              <option value="">No bucket assignment</option>
+              {savingsBuckets.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Row 3: save / cancel */}
+          <div className="flex gap-2 pt-0.5">
+            <button
+              onClick={cancelEdit}
+              className="flex-1 py-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-500 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleSave(t.id)}
+              disabled={saving || !editAmount || !editCategory || !editDate}
+              className="flex-1 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg transition-colors"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div
+        key={t.id}
+        className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 transition-colors ${newIds.has(t.id) ? 'tx-slide-in' : ''}`}
+      >
+        <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor(t) }} />
+
+        <span className="text-slate-500 text-xs w-[52px] flex-shrink-0 tabular-nums">{fmtDate(t.date)}</span>
+
+        <select
+          value={t.category}
+          onChange={(e) => {
+            onEdit(t.id, { amount: t.amount, type: t.type, category: e.target.value, notes: t.notes, date: t.date, bucket_id: t.bucket_id })
+            if (t.notes) saveRule(t.notes, e.target.value)
+          }}
+          className="flex-1 min-w-0 bg-transparent text-slate-300 text-sm focus:outline-none cursor-pointer hover:text-slate-100 transition-colors appearance-none truncate"
+        >
+          {categories.map((c) => (
+            <option key={c.id} value={c.name} className="bg-slate-800">{c.name}</option>
+          ))}
+        </select>
+
+        {editingNoteId === t.id ? (
+          <div className="hidden sm:flex items-center gap-1 flex-1 min-w-0">
+            <input
+              autoFocus
+              type="text"
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveNote(t)
+                if (e.key === 'Escape') setEditingNoteId(null)
+              }}
+              placeholder="Add a note…"
+              maxLength={200}
+              className="flex-1 min-w-0 bg-slate-700 border border-blue-500/50 rounded-lg px-2 py-1 text-slate-100 placeholder-slate-500 text-xs focus:outline-none"
+            />
+            <button onClick={() => saveNote(t)} disabled={savingNote} className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50 flex-shrink-0">
+              {savingNote ? '…' : '✓'}
+            </button>
+            <button onClick={() => setEditingNoteId(null)} className="text-xs text-slate-500 hover:text-slate-300 flex-shrink-0">✕</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => startNoteEdit(t)}
+            title={t.notes || 'Add note'}
+            className="hidden sm:block text-xs truncate max-w-[120px] flex-shrink-0 transition-colors text-left"
+          >
+            {t.notes
+              ? <span className="text-slate-500 hover:text-slate-300">{t.notes}</span>
+              : <span className="text-slate-700 hover:text-slate-500 opacity-0 group-hover:opacity-100">+ note</span>
+            }
+          </button>
+        )}
+
+        <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${amountColor(t)}`}>
+          {amountPrefix(t)}${t.amount.toFixed(2)}
+        </span>
+
+        <button
+          onClick={() => startEdit(t)}
+          title="Edit"
+          className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-blue-400 transition-all text-sm leading-none flex-shrink-0"
+        >
+          ✎
+        </button>
+
+        <button
+          onClick={() => handleDelete(t.id)}
+          disabled={deletingId === t.id}
+          title="Delete"
+          className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all text-xl leading-none flex-shrink-0 disabled:opacity-30"
+        >
+          ×
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl flex flex-col">
       <div className="flex items-center justify-between mb-4">
@@ -139,200 +346,31 @@ export default function TransactionLog({ transactions, categories, onDelete, onE
           <p className="text-slate-600 text-sm">No transactions for this month.</p>
         </div>
       ) : (
-        <div className="overflow-y-auto max-h-[520px] space-y-1.5 pr-1">
-          {transactions.map((t) =>
-            editingId === t.id ? (
-              /* ── Edit row ── */
-              <div
-                key={t.id}
-                className="rounded-xl bg-slate-800 border border-blue-500/40 p-3 space-y-2"
-              >
-                {/* Row 1: type toggle + amount + date */}
-                <div className="flex gap-2">
-                  <div className="flex rounded-lg overflow-hidden border border-slate-700 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setEditType('expense')}
-                      className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        editType === 'expense'
-                          ? 'bg-red-600 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      − Exp
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditType('income')}
-                      className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        editType === 'income'
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      + Inc
-                    </button>
-                  </div>
-                  <div className="relative flex-1">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">$</span>
-                    <input
-                      type="number"
-                      value={editAmount}
-                      onChange={(e) => setEditAmount(e.target.value)}
-                      step="0.01"
-                      min="0.01"
-                      className="w-full bg-slate-700 border border-slate-600 rounded-lg pl-5 pr-2 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <input
-                    type="date"
-                    value={editDate}
-                    onChange={(e) => setEditDate(e.target.value)}
-                    className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-blue-500 shrink-0"
-                  />
-                </div>
+        <div className="overflow-y-auto max-h-[600px] space-y-4 pr-1">
+          {/* Income & Expense transactions */}
+          {nonSavingsTx.length > 0 && (
+            <div className="space-y-1.5">
+              {savingsTx.length > 0 && (
+                <p className="text-slate-600 text-[10px] font-medium uppercase tracking-wider px-1 pb-1">
+                  Income & Expenses
+                </p>
+              )}
+              {nonSavingsTx.map(renderRow)}
+            </div>
+          )}
 
-                {/* Row 2: category + notes */}
-                <div className="flex gap-2">
-                  <select
-                    value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
-                    className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-slate-100 text-xs focus:outline-none focus:border-blue-500 shrink-0 w-36"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={editNotes}
-                    onChange={(e) => setEditNotes(e.target.value)}
-                    placeholder="Notes"
-                    maxLength={200}
-                    className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                {/* Row 3: save / cancel */}
-                <div className="flex gap-2 pt-0.5">
-                  <button
-                    onClick={cancelEdit}
-                    className="flex-1 py-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-500 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleSave(t.id)}
-                    disabled={saving || !editAmount || !editCategory || !editDate}
-                    className="flex-1 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg transition-colors"
-                  >
-                    {saving ? 'Saving…' : 'Save'}
-                  </button>
-                </div>
+          {/* Savings transactions — visually separated */}
+          {savingsTx.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 px-1 pb-1">
+                <div className="flex-1 h-px bg-slate-800" />
+                <p className="text-blue-500/70 text-[10px] font-medium uppercase tracking-wider shrink-0">
+                  Savings — ${savingsTx.reduce((s, t) => s + t.amount, 0).toFixed(2)}
+                </p>
+                <div className="flex-1 h-px bg-slate-800" />
               </div>
-            ) : (
-              /* ── Normal row ── */
-              <div
-                key={t.id}
-                className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 transition-colors ${newIds.has(t.id) ? 'tx-slide-in' : ''}`}
-              >
-                <span
-                  className="h-2 w-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: t.type === 'income' ? '#10b981' : (categoryColorMap[t.category] ?? '#ef4444') }}
-                />
-
-                <span className="text-slate-500 text-xs w-[52px] flex-shrink-0 tabular-nums">
-                  {fmtDate(t.date)}
-                </span>
-
-                {/* Category — inline dropdown, saves on change */}
-                <select
-                  value={t.category}
-                  onChange={(e) => {
-                    onEdit(t.id, {
-                      amount: t.amount,
-                      type: t.type,
-                      category: e.target.value,
-                      notes: t.notes,
-                      date: t.date,
-                    })
-                    if (t.notes) saveRule(t.notes, e.target.value)
-                  }}
-                  className="flex-1 min-w-0 bg-transparent text-slate-300 text-sm focus:outline-none cursor-pointer hover:text-slate-100 transition-colors appearance-none truncate"
-                >
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.name} className="bg-slate-800">
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-
-                {editingNoteId === t.id ? (
-                  <div className="hidden sm:flex items-center gap-1 flex-1 min-w-0">
-                    <input
-                      autoFocus
-                      type="text"
-                      value={noteText}
-                      onChange={(e) => setNoteText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveNote(t)
-                        if (e.key === 'Escape') setEditingNoteId(null)
-                      }}
-                      placeholder="Add a note…"
-                      maxLength={200}
-                      className="flex-1 min-w-0 bg-slate-700 border border-blue-500/50 rounded-lg px-2 py-1 text-slate-100 placeholder-slate-500 text-xs focus:outline-none"
-                    />
-                    <button
-                      onClick={() => saveNote(t)}
-                      disabled={savingNote}
-                      className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50 flex-shrink-0"
-                    >
-                      {savingNote ? '…' : '✓'}
-                    </button>
-                    <button
-                      onClick={() => setEditingNoteId(null)}
-                      className="text-xs text-slate-500 hover:text-slate-300 flex-shrink-0"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => startNoteEdit(t)}
-                    title={t.notes || 'Add note'}
-                    className="hidden sm:block text-xs truncate max-w-[120px] flex-shrink-0 transition-colors text-left"
-                  >
-                    {t.notes
-                      ? <span className="text-slate-500 hover:text-slate-300">{t.notes}</span>
-                      : <span className="text-slate-700 hover:text-slate-500 opacity-0 group-hover:opacity-100">+ note</span>
-                    }
-                  </button>
-                )}
-
-                <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${t.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {t.type === 'income' ? '+' : '−'}${t.amount.toFixed(2)}
-                </span>
-
-                {/* Edit */}
-                <button
-                  onClick={() => startEdit(t)}
-                  title="Edit"
-                  className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-blue-400 transition-all text-sm leading-none flex-shrink-0"
-                >
-                  ✎
-                </button>
-
-                {/* Delete */}
-                <button
-                  onClick={() => handleDelete(t.id)}
-                  disabled={deletingId === t.id}
-                  title="Delete"
-                  className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all text-xl leading-none flex-shrink-0 disabled:opacity-30"
-                >
-                  ×
-                </button>
-              </div>
-            )
+              {savingsTx.map(renderRow)}
+            </div>
           )}
         </div>
       )}

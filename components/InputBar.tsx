@@ -1,31 +1,60 @@
 'use client'
 
 import { useState } from 'react'
-import type { Category, Transaction } from '@/types'
+import type { Category, Transaction, SavingsBucket } from '@/types'
 
 interface Props {
   categories: Category[]
+  savingsBuckets: SavingsBucket[]
   onAdd: (t: Omit<Transaction, 'id'>) => Promise<void>
 }
 
-export default function InputBar({ categories, onAdd }: Props) {
+const TYPE_OPTIONS = [
+  { value: 'expense', label: '− Expense', active: 'bg-red-600', color: 'text-white' },
+  { value: 'savings', label: '⇑ Savings', active: 'bg-blue-600', color: 'text-white' },
+  { value: 'income', label: '+ Income', active: 'bg-emerald-600', color: 'text-white' },
+] as const
+
+type TxType = 'income' | 'expense' | 'savings'
+
+export default function InputBar({ categories, savingsBuckets, onAdd }: Props) {
   const today = () => new Date().toISOString().split('T')[0]
 
   const [amount, setAmount] = useState('')
-  const [type, setType] = useState<'income' | 'expense'>('expense')
+  const [type, setType] = useState<TxType>('expense')
   const [category, setCategory] = useState('')
+  const [bucketId, setBucketId] = useState<number | ''>('')
   const [notes, setNotes] = useState('')
   const [date, setDate] = useState(today)
   const [submitting, setSubmitting] = useState(false)
+
+  function handleCategoryChange(cat: string) {
+    setCategory(cat)
+    // Suggest savings type when Savings category is selected (only if currently expense)
+    if (cat === 'Savings' && type === 'expense') setType('savings')
+  }
+
+  function handleTypeChange(t: TxType) {
+    setType(t)
+    if (t !== 'savings') setBucketId('')
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!amount || !category) return
     setSubmitting(true)
-    await onAdd({ amount: parseFloat(amount), type, category, notes, date })
+    await onAdd({
+      amount: parseFloat(amount),
+      type,
+      category,
+      notes,
+      date,
+      bucket_id: type === 'savings' && bucketId !== '' ? bucketId : null,
+    })
     setSubmitting(false)
     setAmount('')
     setCategory('')
+    setBucketId('')
     setNotes('')
     setDate(today())
   }
@@ -35,36 +64,22 @@ export default function InputBar({ categories, onAdd }: Props) {
       <h2 className="text-slate-200 font-semibold text-base mb-4">Add Transaction</h2>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        {/* Income / Expense toggle */}
-        <div className="relative flex rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
-          {/* Sliding pill */}
-          <div
-            aria-hidden
-            className="absolute inset-y-0 w-1/2 rounded-xl"
-            style={{
-              transform: type === 'income' ? 'translateX(100%)' : 'translateX(0)',
-              backgroundColor: type === 'expense' ? '#ef4444' : '#10b981',
-              transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => setType('expense')}
-            className={`relative z-10 flex-1 py-2.5 text-sm font-semibold transition-colors duration-200 ${
-              type === 'expense' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            − Expense
-          </button>
-          <button
-            type="button"
-            onClick={() => setType('income')}
-            className={`relative z-10 flex-1 py-2.5 text-sm font-semibold transition-colors duration-200 ${
-              type === 'income' ? 'text-white' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            + Income
-          </button>
+        {/* 3-way type toggle */}
+        <div className="flex rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+          {TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => handleTypeChange(opt.value)}
+              className={`flex-1 py-2.5 text-sm font-semibold transition-colors duration-150 ${
+                type === opt.value
+                  ? `${opt.active} ${opt.color}`
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
 
         {/* Amount */}
@@ -87,19 +102,29 @@ export default function InputBar({ categories, onAdd }: Props) {
         {/* Category */}
         <select
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) => handleCategoryChange(e.target.value)}
           required
           className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition"
         >
-          <option value="" disabled className="text-slate-500">
-            Select category…
-          </option>
+          <option value="" disabled className="text-slate-500">Select category…</option>
           {categories.map((c) => (
-            <option key={c.id} value={c.name}>
-              {c.name}
-            </option>
+            <option key={c.id} value={c.name}>{c.name}</option>
           ))}
         </select>
+
+        {/* Savings bucket selector (only when type=savings) */}
+        {type === 'savings' && savingsBuckets.length > 0 && (
+          <select
+            value={bucketId}
+            onChange={(e) => setBucketId(e.target.value ? Number(e.target.value) : '')}
+            className="w-full bg-slate-800 border border-blue-700/50 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition"
+          >
+            <option value="">Assign to bucket (optional)…</option>
+            {savingsBuckets.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        )}
 
         {/* Date */}
         <input
@@ -120,7 +145,6 @@ export default function InputBar({ categories, onAdd }: Props) {
           className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition"
         />
 
-        {/* Submit */}
         <button
           type="submit"
           disabled={submitting || !amount || !category}

@@ -4,10 +4,11 @@ import { getAuthUser } from '@/lib/session'
 
 interface BulkTransaction {
   amount: number
-  type: 'income' | 'expense'
+  type: 'income' | 'expense' | 'savings'
   category: string
   notes: string
   date: string
+  bucket_id?: number | null
 }
 
 export async function POST(request: NextRequest) {
@@ -23,8 +24,8 @@ export async function POST(request: NextRequest) {
 
     await db.batch(
       transactions.map((t) => ({
-        sql: 'INSERT INTO transactions (amount, type, category, notes, date, user_id) VALUES (?, ?, ?, ?, ?, ?)',
-        args: [t.amount, t.type, t.category, t.notes ?? '', t.date, user.userId],
+        sql: 'INSERT INTO transactions (amount, type, category, notes, date, user_id, bucket_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        args: [t.amount, t.type, t.category, t.notes ?? '', t.date, user.userId, t.bucket_id ?? null],
       })),
       'write'
     )

@@ -72,14 +72,14 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const { amount, type, category, notes, date } = await request.json()
+    const { amount, type, category, notes, date, bucket_id } = await request.json()
     if (!amount || !type || !category || !date) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     const insertResult = await db.execute({
-      sql: 'INSERT INTO transactions (amount, type, category, notes, date, user_id) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [Number(amount), type, category, notes ?? '', date, user.userId],
+      sql: 'INSERT INTO transactions (amount, type, category, notes, date, user_id, bucket_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [Number(amount), type, category, notes ?? '', date, user.userId, bucket_id ?? null],
     })
 
     const txResult = await db.execute({

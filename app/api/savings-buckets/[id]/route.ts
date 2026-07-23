@@ -13,29 +13,23 @@ export async function PATCH(
     const id = parseInt(params.id)
     if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 })
 
-    const { amount, type, category, notes, date, bucket_id } = await request.json()
-    if (!amount || !type || !category || !date) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
+    const { name, goal_amount, starting_balance } = await request.json()
+    if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
-    const updateResult = await db.execute({
-      sql: 'UPDATE transactions SET amount=?, type=?, category=?, notes=?, date=?, bucket_id=? WHERE id=? AND user_id=?',
-      args: [Number(amount), type, category, notes ?? '', date, bucket_id ?? null, id, user.userId],
+    const r = await db.execute({
+      sql: 'UPDATE savings_buckets SET name=?, goal_amount=?, starting_balance=? WHERE id=? AND user_id=?',
+      args: [name.trim(), goal_amount ?? null, starting_balance ?? 0, id, user.userId],
     })
+    if (r.rowsAffected === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (updateResult.rowsAffected === 0) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
-
-    const txResult = await db.execute({
-      sql: 'SELECT * FROM transactions WHERE id = ?',
+    const row = await db.execute({
+      sql: 'SELECT * FROM savings_buckets WHERE id = ?',
       args: [id],
     })
-
-    return NextResponse.json(txResult.rows[0])
+    return NextResponse.json(row.rows[0])
   } catch (err) {
     console.error(err)
-    return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to update bucket' }, { status: 500 })
   }
 }
 
@@ -51,12 +45,12 @@ export async function DELETE(
     if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 })
 
     await db.execute({
-      sql: 'DELETE FROM transactions WHERE id = ? AND user_id = ?',
+      sql: 'DELETE FROM savings_buckets WHERE id = ? AND user_id = ?',
       args: [id, user.userId],
     })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error(err)
-    return NextResponse.json({ error: 'Failed to delete transaction' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to delete bucket' }, { status: 500 })
   }
 }

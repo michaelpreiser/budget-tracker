@@ -5,7 +5,7 @@ import { getAuthUser } from '@/lib/session'
 export interface CheckTransaction {
   date: string
   amount: number
-  type: 'income' | 'expense'
+  type: 'income' | 'expense' | 'savings'
   description: string
 }
 
