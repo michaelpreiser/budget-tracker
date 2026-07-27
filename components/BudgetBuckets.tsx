@@ -108,7 +108,12 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
   const lastSavTx = lastMonthTransactions.filter((t) => t.type === 'savings')
 
   function sumBucket(txs: Transaction[], b: BucketKey) {
-    if (b === 'savings') return txs.filter((t) => t.type === 'savings').reduce((s, t) => s + t.amount, 0)
+    if (b === 'savings') {
+      // savings-type transactions + expense transactions whose category is assigned to savings
+      const savingsType = txs.filter((t) => t.type === 'savings').reduce((s, t) => s + t.amount, 0)
+      const assignedExpenses = txs.filter((t) => t.type === 'expense' && assignments[t.category] === 'savings').reduce((s, t) => s + t.amount, 0)
+      return savingsType + assignedExpenses
+    }
     return txs.filter((t) => t.type === 'expense' && assignments[t.category] === b).reduce((s, t) => s + t.amount, 0)
   }
 
@@ -136,6 +141,10 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
   })
   const savBreakdown: Record<string, number> = {}
   savTx.forEach((t) => { savBreakdown[t.category] = (savBreakdown[t.category] ?? 0) + t.amount })
+  // Also include expense transactions assigned to the savings bucket (e.g. Investing)
+  expTx.filter((t) => assignments[t.category] === 'savings').forEach((t) => {
+    savBreakdown[t.category] = (savBreakdown[t.category] ?? 0) + t.amount
+  })
 
   // Unassigned expense categories
   const unassigned = Array.from(new Set(expTx.filter((t) => !assignments[t.category]).map((t) => t.category)))
