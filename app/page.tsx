@@ -10,7 +10,6 @@ import SavingsBuckets from '@/components/SavingsBuckets'
 import CategoryManager from '@/components/CategoryManager'
 import StatementImport from '@/components/StatementImport'
 import CategoryRules from '@/components/CategoryRules'
-import EventSavingsPlanner from '@/components/EventSavingsPlanner'
 import AppHeader from '@/components/AppHeader'
 import type { Budget, Category, Transaction, SavingsBucket } from '@/types'
 
@@ -609,10 +608,7 @@ export default function Home() {
           />
         )}
 
-        {/* ── 3. Upcoming Events ── */}
-        <EventSavingsPlanner />
-
-        {/* ── 4. HYSA / Savings Buckets ── */}
+        {/* ── 3. HYSA / Savings Buckets ── */}
         <SavingsBuckets
           transactions={transactions}
           lastMonthTransactions={lastMonthTransactions}

@@ -16,7 +16,12 @@
       "Bash(git add -A && git commit -m \"$\\(cat <<'EOF'\nAdd UI enhancements: animated cards, color-coded dots, dynamic budget bars, yearly row polish, sliding nav, toggle animation, health score widget\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)",
       "Bash(npm run build 2>&1 | tail -5 && git add app/page.tsx && git commit -m \"$\\(cat <<'EOF'\nMove Add Transaction below Import Bank Statement and Category Breakdown\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)",
       "Bash(npm run build 2>&1 | tail -5 && git add app/page.tsx && git commit -m \"$\\(cat <<'EOF'\nReorder left column: Category Breakdown → Import → Add Transaction\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)",
-      "Bash(git add -A && git commit -m \"$\\(cat <<'EOF'\nUnify header across all pages via shared AppHeader component \\(same width, logo, nav, user menu everywhere\\)\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)"
+      "Bash(git add -A && git commit -m \"$\\(cat <<'EOF'\nUnify header across all pages via shared AppHeader component \\(same width, logo, nav, user menu everywhere\\)\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)",
+      "Bash(git add app/page.tsx && git commit -m \"$\\(cat <<'EOF'\nAdd goal adherence as 4th factor in financial health score\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push origin main 2>&1 | tail -3)",
+      "Bash(git add lib/categorization.ts app/api/category-rules/route.ts && git commit -m \"Fix category rule matching: word boundaries + protect established rules from accidental overwrite\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\" && git push origin main 2>&1 | tail -3)",
+      "Bash(git add app/api/events/ components/EventSavingsPlanner.tsx app/page.tsx && git status)",
+      "Bash(git commit -m \"$\\(cat <<'EOF'\nAdd Event Savings Planner feature\n\nOne-time savings goal tracker for events \\(vacations, parties, purchases\\).\nIncludes auto-created DB tables, 5 API routes, and full EventSavingsPlanner\ncomponent with progress bars, deposit/expense logging, status badges, and\npast events section. Placed on dashboard between Health Score and Budget Targets.\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push origin main)"
     ]
   }
 }
