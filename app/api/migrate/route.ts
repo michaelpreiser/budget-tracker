@@ -16,6 +16,43 @@ export async function POST() {
     steps.push('bucket_id column already exists — skipped')
   }
 
+  // 1b. Widen the type CHECK constraint to include 'savings' (requires table reconstruction)
+  try {
+    const schemaResult = await db.execute({
+      sql: "SELECT sql FROM sqlite_master WHERE type='table' AND name='transactions'",
+      args: [],
+    })
+    const schemaSql = String(schemaResult.rows[0]?.sql ?? '')
+    if (!schemaSql.includes("'savings'") && !schemaSql.includes('"savings"')) {
+      await db.batch([
+        {
+          sql: `CREATE TABLE transactions_new (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            amount    REAL    NOT NULL,
+            type      TEXT    NOT NULL CHECK(type IN ('income','expense','savings')),
+            category  TEXT    NOT NULL,
+            notes     TEXT    NOT NULL DEFAULT '',
+            date      TEXT    NOT NULL,
+            user_id   INTEGER NOT NULL REFERENCES users(id),
+            bucket_id INTEGER
+          )`,
+          args: [],
+        },
+        {
+          sql: 'INSERT INTO transactions_new SELECT id, amount, type, category, notes, date, user_id, bucket_id FROM transactions',
+          args: [],
+        },
+        { sql: 'DROP TABLE transactions', args: [] },
+        { sql: 'ALTER TABLE transactions_new RENAME TO transactions', args: [] },
+      ], 'write')
+      steps.push('Widened transactions type constraint to include savings')
+    } else {
+      steps.push('transactions type constraint already supports savings — skipped')
+    }
+  } catch (e) {
+    steps.push(`type constraint update failed: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
   // 2. savings_buckets table
   await db.execute({
     sql: `CREATE TABLE IF NOT EXISTS savings_buckets (
