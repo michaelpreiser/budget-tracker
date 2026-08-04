@@ -103,5 +103,18 @@ export async function POST() {
   })
   steps.push('user_settings seeded')
 
+  // 6. Savings sub-allocations table
+  await db.execute({
+    sql: `CREATE TABLE IF NOT EXISTS savings_suballocations (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL,
+      name       TEXT    NOT NULL,
+      pct        REAL    NOT NULL DEFAULT 0,
+      sort_order INTEGER DEFAULT 0
+    )`,
+    args: [],
+  })
+  steps.push('savings_suballocations table ready')
+
   return NextResponse.json({ ok: true, steps })
 }

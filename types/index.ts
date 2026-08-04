@@ -41,3 +41,9 @@ export interface UserSettings {
   savings_pct: number
   include_savings_in_discretionary: boolean
 }
+
+export interface SavingsSuballocation {
+  id: number
+  name: string
+  pct: number
+}
