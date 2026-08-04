@@ -368,37 +368,47 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
                             <button onClick={() => saveSuballoc(a.id)} className={`text-xs font-semibold ${meta.text}`}>Save</button>
                             <button onClick={() => setEditingId(null)} className="text-slate-500 hover:text-slate-300 text-xs">✕</button>
                           </div>
-                        ) : (
-                          <div className="group">
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="text-slate-400 truncate">{a.name}</span>
-                              <div className="flex items-center gap-2 shrink-0 ml-2">
-                                <span className="text-slate-500 tabular-nums">{a.pct}%</span>
-                                {monthlyIncome > 0 && (
-                                  <span className={`tabular-nums ${meta.text} opacity-80`}>${fmt((a.pct / 100) * monthlyIncome)}</span>
-                                )}
-                                <button
-                                  onClick={() => { setEditingId(a.id); setEditName(a.name); setEditPct(String(a.pct)) }}
-                                  className="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  title="Edit"
-                                >✎</button>
-                                <button
-                                  onClick={() => deleteSuballoc(a.id)}
-                                  className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  title="Delete"
-                                >✕</button>
+                        ) : (() => {
+                          const suballocTarget = (a.pct / 100) * monthlyIncome
+                          const suballocActual = (breakdown as Record<string, number>)[a.name] ?? 0
+                          const suballocPct = suballocTarget > 0 ? (suballocActual / suballocTarget) * 100 : 0
+                          return (
+                            <div className="group">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="text-slate-400 truncate">{a.name}</span>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                  <span className="text-slate-500 tabular-nums">{a.pct}%</span>
+                                  {monthlyIncome > 0 && (
+                                    <span className={`tabular-nums ${meta.text} opacity-80`}>${fmt(suballocTarget)}</span>
+                                  )}
+                                  <button
+                                    onClick={() => { setEditingId(a.id); setEditName(a.name); setEditPct(String(a.pct)) }}
+                                    className="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Edit"
+                                  >✎</button>
+                                  <button
+                                    onClick={() => deleteSuballoc(a.id)}
+                                    className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Delete"
+                                  >✕</button>
+                                </div>
                               </div>
+                              {monthlyIncome > 0 && (
+                                <div className="mt-0.5 flex items-center gap-1.5">
+                                  <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full transition-all duration-500 opacity-70"
+                                      style={{ width: `${Math.min(suballocPct, 100)}%`, backgroundColor: meta.color }}
+                                    />
+                                  </div>
+                                  <span className={`text-[10px] tabular-nums shrink-0 ${suballocPct > 100 ? 'text-amber-400' : 'text-slate-500'}`}>
+                                    {Math.round(suballocPct)}%
+                                  </span>
+                                </div>
+                              )}
                             </div>
-                            {monthlyIncome > 0 && (
-                              <div className="mt-0.5 h-1 bg-slate-700 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-500 opacity-60"
-                                  style={{ width: `${bucketPct[b] > 0 ? Math.min((actual * (a.pct / bucketPct[b])) / ((a.pct / 100) * monthlyIncome) * 100, 100) : 0}%`, backgroundColor: meta.color }}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
+                          )
+                        })()}
                       </div>
                     ))}
 
