@@ -8,9 +8,9 @@ function fmt(n: number) {
 }
 
 const BUCKET_META = {
-  needs: { label: 'Needs', color: '#3b82f6', text: 'text-blue-400', desc: 'Housing, utilities, groceries, essentials' },
+  needs: { label: 'Needs', color: '#ef4444', text: 'text-red-400', desc: 'Housing, utilities, groceries, essentials' },
   wants: { label: 'Wants', color: '#a855f7', text: 'text-purple-400', desc: 'Dining, entertainment, subscriptions' },
-  savings: { label: 'Savings', color: '#10b981', text: 'text-emerald-400', desc: 'Tagged savings transactions' },
+  savings: { label: 'Savings', color: '#3b82f6', text: 'text-blue-400', desc: 'Tagged savings transactions' },
 } as const
 
 type BucketKey = keyof typeof BUCKET_META
@@ -381,7 +381,7 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
                               {monthlyIncome > 0 && (
                                 <div className="mt-0.5 h-1 bg-slate-700 rounded-full overflow-hidden">
                                   <div
-                                    className="h-full rounded-full bg-emerald-600/60 transition-all duration-500"
+                                    className="h-full rounded-full bg-blue-600/60 transition-all duration-500"
                                     style={{ width: `${Math.min((actual / ((a.pct / 100) * monthlyIncome)) * 100, 100)}%` }}
                                   />
                                 </div>
