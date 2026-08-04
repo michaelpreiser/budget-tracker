@@ -67,6 +67,10 @@ export default function TotalPage() {
     .filter((t) => t.type === 'expense')
     .reduce((s, t) => s + t.amount, 0)
 
+  const totalSavings = transactions
+    .filter((t) => t.type === 'savings')
+    .reduce((s, t) => s + t.amount, 0)
+
   const expenseByCategory = transactions
     .filter((t) => t.type === 'expense')
     .reduce((acc, t) => {
@@ -80,6 +84,15 @@ export default function TotalPage() {
       acc[t.category] = (acc[t.category] ?? 0) + t.amount
       return acc
     }, {} as Record<string, number>)
+
+  const savingsByCategory = transactions
+    .filter((t) => t.type === 'savings')
+    .reduce((acc, t) => {
+      acc[t.category] = (acc[t.category] ?? 0) + t.amount
+      return acc
+    }, {} as Record<string, number>)
+
+  const allSavingsCategories = Object.keys(savingsByCategory).sort()
 
   const allExpenseCategories = Object.keys(expenseByCategory).sort()
   const allIncomeCategories = Object.keys(incomeByCategory).sort()
@@ -121,7 +134,8 @@ export default function TotalPage() {
     }, 0)
     const adjIncome = income - exclIncome
     const adjExpenses = expenses - excl
-    return { name, monthNum, income: adjIncome, expenses: adjExpenses, net: adjIncome - adjExpenses, hasData: monthTx.length > 0 }
+    const savings = monthTx.filter((t) => t.type === 'savings').reduce((s, t) => s + t.amount, 0)
+    return { name, monthNum, income: adjIncome, expenses: adjExpenses, savings, net: adjIncome - adjExpenses, hasData: monthTx.length > 0 }
   })
 
   // Category breakdown sorted by amount
@@ -149,7 +163,7 @@ export default function TotalPage() {
         ) : (
           <>
             {/* Stats row */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Income */}
               <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
                 <div className="flex items-center justify-between mb-1">
@@ -256,6 +270,19 @@ export default function TotalPage() {
                 )}
               </div>
 
+              {/* Savings */}
+              <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
+                <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">Savings</p>
+                <p className="text-2xl font-bold tabular-nums leading-none text-blue-400">
+                  ⇑${fmt(totalSavings)}
+                </p>
+                {totalIncome > 0 && (
+                  <p className="text-slate-600 text-xs mt-1.5 tabular-nums">
+                    {((totalSavings / totalIncome) * 100).toFixed(1)}% savings rate
+                  </p>
+                )}
+              </div>
+
               {/* Net */}
               <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
                 <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">
@@ -279,11 +306,12 @@ export default function TotalPage() {
                       <th className="text-left text-slate-500 text-xs font-medium uppercase tracking-wider px-5 py-3">Month</th>
                       <th className="text-right text-slate-500 text-xs font-medium uppercase tracking-wider px-5 py-3">Income</th>
                       <th className="text-right text-slate-500 text-xs font-medium uppercase tracking-wider px-5 py-3">Expenses</th>
+                      <th className="text-right text-slate-500 text-xs font-medium uppercase tracking-wider px-5 py-3">Savings</th>
                       <th className="text-right text-slate-500 text-xs font-medium uppercase tracking-wider px-5 py-3">Net</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyData.map(({ name, monthNum, income, expenses, net: mNet, hasData }) => {
+                    {monthlyData.map(({ name, monthNum, income, expenses, savings, net: mNet, hasData }) => {
                       const isCurrentMonth = year === currentYearNum && monthNum === currentMonthNum
                       return (
                         <tr
@@ -303,6 +331,9 @@ export default function TotalPage() {
                           <td className="px-5 py-3 text-right tabular-nums text-red-400">
                             {expenses > 0 ? `−$${fmt(expenses)}` : '—'}
                           </td>
+                          <td className="px-5 py-3 text-right tabular-nums text-blue-400">
+                            {savings > 0 ? `⇑$${fmt(savings)}` : '—'}
+                          </td>
                           <td className={`px-5 py-3 text-right tabular-nums font-medium ${
                             !hasData ? 'text-slate-500' : mNet >= 0 ? 'text-emerald-400' : 'text-red-400'
                           }`}>
@@ -317,6 +348,7 @@ export default function TotalPage() {
                       <td className="px-5 py-3 text-slate-300 font-semibold">Total</td>
                       <td className="px-5 py-3 text-right tabular-nums text-emerald-400 font-semibold">${fmt(adjustedIncome)}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-red-400 font-semibold">−${fmt(adjustedExpenses)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-blue-400 font-semibold">⇑${fmt(totalSavings)}</td>
                       <td className={`px-5 py-3 text-right tabular-nums font-semibold ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
                         {isProfit ? '+' : '−'}${fmt(Math.abs(net))}
                       </td>
@@ -430,6 +462,60 @@ export default function TotalPage() {
                       </div>
                     )
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Savings by category */}
+            {allSavingsCategories.length > 0 && (
+              <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl">
+                <h2 className="text-slate-200 font-semibold text-base mb-4">Savings by Category</h2>
+                <div className="space-y-3">
+                  {Object.entries(savingsByCategory)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([cat, amt]) => {
+                      const pct = totalSavings > 0 ? (amt / totalSavings) * 100 : 0
+                      const key = `savings-${cat}`
+                      const isOpen = expandedCategory === key
+                      const catTx = transactions
+                        .filter((t) => t.type === 'savings' && t.category === cat)
+                        .sort((a, b) => b.date.localeCompare(a.date))
+                      return (
+                        <div key={cat}>
+                          <button
+                            onClick={() => setExpandedCategory(isOpen ? null : key)}
+                            className="w-full flex justify-between items-baseline mb-1 group"
+                          >
+                            <span className="text-sm truncate pr-2 group-hover:text-slate-100 transition-colors text-slate-300">
+                              {isOpen ? '▾' : '▸'} {cat}
+                            </span>
+                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
+                              <span className="text-sm font-medium tabular-nums text-blue-400">
+                                ⇑${fmt(amt)}
+                              </span>
+                              <span className="text-slate-600 text-xs tabular-nums">{pct.toFixed(0)}%</span>
+                            </div>
+                          </button>
+                          <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden mb-1">
+                            <div
+                              className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-blue-700 to-blue-400"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          {isOpen && (
+                            <div className="mt-2 mb-1 rounded-xl bg-slate-800/60 divide-y divide-slate-700/50 overflow-hidden">
+                              {catTx.map((t) => (
+                                <div key={t.id} className="flex items-center gap-3 px-3 py-2 text-xs">
+                                  <span className="text-slate-500 w-[72px] flex-shrink-0 tabular-nums">{t.date}</span>
+                                  <span className="flex-1 text-slate-400 truncate">{t.notes || '—'}</span>
+                                  <span className="text-blue-400 tabular-nums font-medium flex-shrink-0">⇑${fmt(t.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                 </div>
               </div>
             )}

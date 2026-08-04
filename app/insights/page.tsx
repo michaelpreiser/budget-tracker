@@ -101,6 +101,7 @@ export default function InsightsPage() {
       month: label,
       Income: monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0),
       Expenses: monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
+      Savings: monthTx.filter((t) => t.type === 'savings').reduce((s, t) => s + t.amount, 0),
     }
   })
 
@@ -110,6 +111,20 @@ export default function InsightsPage() {
     (t) => t.date.startsWith(selectedMonth) && t.type === 'expense'
   )
   const totalMonthExp = monthExpenseTx.reduce((s, t) => s + t.amount, 0)
+
+  const monthSavingsTx = allTransactions.filter(
+    (t) => t.date.startsWith(selectedMonth) && t.type === 'savings'
+  )
+  const totalMonthSav = monthSavingsTx.reduce((s, t) => s + t.amount, 0)
+
+  const savCatData = Object.entries(
+    monthSavingsTx.reduce((acc, t) => {
+      acc[t.category] = (acc[t.category] ?? 0) + t.amount
+      return acc
+    }, {} as Record<string, number>)
+  )
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value]) => ({ name, value }))
 
   const catData = Object.entries(
     monthExpenseTx.reduce((acc, t) => {
@@ -219,6 +234,14 @@ export default function InsightsPage() {
                 dot={{ r: 3, fill: '#f87171', strokeWidth: 0 }}
                 activeDot={{ r: 5 }}
               />
+              <Line
+                type="monotone"
+                dataKey="Savings"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }}
+                activeDot={{ r: 5 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -290,7 +313,35 @@ export default function InsightsPage() {
           )}
         </div>
 
-        {/* ── 3. Daily Spending ── */}
+        {/* ── 3. Savings by Category ── */}
+        {savCatData.length > 0 && (
+          <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl">
+            <h2 className="text-slate-200 font-semibold text-base mb-0.5">Savings by Category</h2>
+            <p className="text-slate-500 text-xs mb-5">{fmtMonthLabel(selectedMonth)} · total ${fmt(totalMonthSav)}</p>
+            <div className="space-y-2.5">
+              {savCatData.map(({ name, value }, i) => {
+                const pct = totalMonthSav > 0 ? (value / totalMonthSav) * 100 : 0
+                return (
+                  <div key={name} className="flex items-center gap-2">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
+                    />
+                    <span className="text-slate-300 text-sm flex-1 truncate">{name}</span>
+                    <span className="text-slate-500 text-xs tabular-nums w-9 text-right">
+                      {pct.toFixed(0)}%
+                    </span>
+                    <span className="text-blue-400 text-sm font-medium tabular-nums w-24 text-right">
+                      ⇑${fmt(value)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── 4. Daily Spending ── */}
         <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl">
           <h2 className="text-slate-200 font-semibold text-base mb-0.5">Daily Spending</h2>
           <p className="text-slate-500 text-xs mb-5">{fmtMonthLabel(selectedMonth)}</p>
@@ -327,7 +378,7 @@ export default function InsightsPage() {
           </ResponsiveContainer>
         </div>
 
-        {/* ── 4. Avg Transaction Size ── */}
+        {/* ── 5. Avg Transaction Size ── */}
         {avgData.length > 0 && (
           <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl">
             <h2 className="text-slate-200 font-semibold text-base mb-0.5">
