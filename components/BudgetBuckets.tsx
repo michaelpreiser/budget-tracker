@@ -1,7 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import type { Category, Transaction, BucketAssignment, UserSettings, SavingsSuballocation } from '@/types'
+import type { Category, Transaction, BucketAssignment, UserSettings } from '@/types'
+
+interface Suballocation {
+  id: number
+  name: string
+  pct: number
+  bucket: string
+}
 
 function fmt(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -33,11 +40,11 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
-  // Sub-allocations
-  const [suballocations, setSuballocations] = useState<SavingsSuballocation[]>([])
-  const [showSuballoc, setShowSuballoc] = useState(false)
-  const [newAllocName, setNewAllocName] = useState('')
-  const [newAllocPct, setNewAllocPct] = useState('')
+  // Sub-allocations (per bucket)
+  const [suballocations, setSuballocations] = useState<Suballocation[]>([])
+  const [showSuballoc, setShowSuballoc] = useState<Record<BucketKey, boolean>>({ needs: false, wants: false, savings: false })
+  const [newAllocName, setNewAllocName] = useState<Record<BucketKey, string>>({ needs: '', wants: '', savings: '' })
+  const [newAllocPct, setNewAllocPct] = useState<Record<BucketKey, string>>({ needs: '', wants: '', savings: '' })
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editName, setEditName] = useState('')
   const [editPct, setEditPct] = useState('')
@@ -59,7 +66,10 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
       a.forEach((row) => { map[row.category] = row.bucket })
       setAssignments(map)
     }
-    if (subRes.ok) setSuballocations(await subRes.json())
+    if (subRes.ok) {
+      const data: Suballocation[] = await subRes.json()
+      setSuballocations(data)
+    }
     setLoaded(true)
   }, [])
 
@@ -95,19 +105,20 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
   }
 
   // Sub-allocation CRUD
-  async function addSuballoc() {
-    const pct = parseFloat(newAllocPct)
-    if (!newAllocName.trim() || isNaN(pct) || pct <= 0) return
+  async function addSuballoc(b: BucketKey) {
+    const name = newAllocName[b]
+    const pct = parseFloat(newAllocPct[b])
+    if (!name.trim() || isNaN(pct) || pct <= 0) return
     const res = await fetch('/api/savings-suballocations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newAllocName.trim(), pct }),
+      body: JSON.stringify({ name: name.trim(), pct, bucket: b }),
     })
     if (res.ok) {
-      const created: SavingsSuballocation = await res.json()
+      const created: Suballocation = await res.json()
       setSuballocations((prev) => [...prev, created])
-      setNewAllocName('')
-      setNewAllocPct('')
+      setNewAllocName((prev) => ({ ...prev, [b]: '' }))
+      setNewAllocPct((prev) => ({ ...prev, [b]: '' }))
     }
   }
 
@@ -170,9 +181,11 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
 
   const unassigned = Array.from(new Set(expTx.filter((t) => !assignments[t.category]).map((t) => t.category)))
 
-  // Sub-allocation derived values
-  const suballocTotal = suballocations.reduce((s, a) => s + a.pct, 0)
-  const suballocValid = suballocations.length === 0 || Math.abs(suballocTotal - settings.savings_pct) < 0.01
+  // Sub-allocation derived values per bucket
+  const bucketPct: Record<BucketKey, number> = { needs: settings.needs_pct, wants: settings.wants_pct, savings: settings.savings_pct }
+  function subAllocsFor(b: BucketKey) { return suballocations.filter((a) => a.bucket === b) }
+  function suballocTotalFor(b: BucketKey) { return subAllocsFor(b).reduce((s, a) => s + a.pct, 0) }
+  function suballocValidFor(b: BucketKey) { const subs = subAllocsFor(b); return subs.length === 0 || Math.abs(suballocTotalFor(b) - bucketPct[b]) < 0.01 }
 
   if (!loaded) return null
 
@@ -323,113 +336,109 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
                 <p className="text-slate-700 text-xs mt-3">No savings-tagged transactions this month.</p>
               )}
 
-              {/* ── Savings sub-allocations ── */}
-              {b === 'savings' && (
-                <div className="mt-3 pt-3 border-t border-slate-700/50">
-                  <button
-                    onClick={() => setShowSuballoc((v) => !v)}
-                    className={`text-[11px] font-semibold transition-colors ${showSuballoc ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'}`}
-                  >
-                    {showSuballoc ? '▾ Hide breakdown' : '▸ Break down savings %'}
-                  </button>
+              {/* ── Sub-allocations (all buckets) ── */}
+              <div className="mt-3 pt-3 border-t border-slate-700/50">
+                <button
+                  onClick={() => setShowSuballoc((v) => ({ ...v, [b]: !v[b] }))}
+                  className={`text-[11px] font-semibold transition-colors ${showSuballoc[b] ? meta.text : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  {showSuballoc[b] ? '▾ Hide breakdown' : `▸ Break down ${meta.label.toLowerCase()} %`}
+                </button>
 
-                  {showSuballoc && (
-                    <div className="mt-2 space-y-2">
-                      {/* Existing rows */}
-                      {suballocations.map((a) => (
-                        <div key={a.id}>
-                          {editingId === a.id ? (
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                className="flex-1 min-w-0 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-emerald-500"
-                                placeholder="Label"
-                              />
-                              <input
-                                type="number" min="0" max="100" step="0.1"
-                                value={editPct}
-                                onChange={(e) => setEditPct(e.target.value)}
-                                className="w-14 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-slate-200 text-xs text-center focus:outline-none focus:border-emerald-500"
-                              />
-                              <span className="text-slate-500 text-xs">%</span>
-                              <button onClick={() => saveSuballoc(a.id)} className="text-emerald-400 hover:text-emerald-300 text-xs font-semibold">Save</button>
-                              <button onClick={() => setEditingId(null)} className="text-slate-500 hover:text-slate-300 text-xs">✕</button>
-                            </div>
-                          ) : (
-                            <div className="group">
-                              <div className="flex items-center justify-between text-[11px]">
-                                <span className="text-slate-400 truncate">{a.name}</span>
-                                <div className="flex items-center gap-2 shrink-0 ml-2">
-                                  <span className="text-slate-500 tabular-nums">{a.pct}%</span>
-                                  {monthlyIncome > 0 && (
-                                    <span className="text-emerald-400/80 tabular-nums">${fmt((a.pct / 100) * monthlyIncome)}</span>
-                                  )}
-                                  <button
-                                    onClick={() => { setEditingId(a.id); setEditName(a.name); setEditPct(String(a.pct)) }}
-                                    className="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Edit"
-                                  >✎</button>
-                                  <button
-                                    onClick={() => deleteSuballoc(a.id)}
-                                    className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Delete"
-                                  >✕</button>
-                                </div>
+                {showSuballoc[b] && (
+                  <div className="mt-2 space-y-2">
+                    {subAllocsFor(b).map((a) => (
+                      <div key={a.id}>
+                        {editingId === a.id ? (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              className="flex-1 min-w-0 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+                              style={{ '--tw-ring-color': meta.color } as React.CSSProperties}
+                              placeholder="Label"
+                            />
+                            <input
+                              type="number" min="0" max="100" step="0.1"
+                              value={editPct}
+                              onChange={(e) => setEditPct(e.target.value)}
+                              className="w-14 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-slate-200 text-xs text-center focus:outline-none"
+                            />
+                            <span className="text-slate-500 text-xs">%</span>
+                            <button onClick={() => saveSuballoc(a.id)} className={`text-xs font-semibold ${meta.text}`}>Save</button>
+                            <button onClick={() => setEditingId(null)} className="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+                          </div>
+                        ) : (
+                          <div className="group">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-slate-400 truncate">{a.name}</span>
+                              <div className="flex items-center gap-2 shrink-0 ml-2">
+                                <span className="text-slate-500 tabular-nums">{a.pct}%</span>
+                                {monthlyIncome > 0 && (
+                                  <span className={`tabular-nums ${meta.text} opacity-80`}>${fmt((a.pct / 100) * monthlyIncome)}</span>
+                                )}
+                                <button
+                                  onClick={() => { setEditingId(a.id); setEditName(a.name); setEditPct(String(a.pct)) }}
+                                  className="text-slate-600 hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Edit"
+                                >✎</button>
+                                <button
+                                  onClick={() => deleteSuballoc(a.id)}
+                                  className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Delete"
+                                >✕</button>
                               </div>
-                              {/* Mini progress bar per sub-allocation */}
-                              {monthlyIncome > 0 && (
-                                <div className="mt-0.5 h-1 bg-slate-700 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full rounded-full bg-blue-600/60 transition-all duration-500"
-                                    style={{ width: `${Math.min((actual / ((a.pct / 100) * monthlyIncome)) * 100, 100)}%` }}
-                                  />
-                                </div>
-                              )}
                             </div>
-                          )}
-                        </div>
-                      ))}
-
-                      {/* Sum validation */}
-                      {suballocations.length > 0 && !suballocValid && (
-                        <p className="text-amber-400 text-[10px]">
-                          Sub-totals add to {suballocTotal.toFixed(1)}% — should equal {settings.savings_pct}%
-                        </p>
-                      )}
-                      {suballocations.length > 0 && suballocValid && (
-                        <p className="text-emerald-600 text-[10px]">✓ {suballocTotal.toFixed(1)}% allocated</p>
-                      )}
-
-                      {/* Add row */}
-                      <div className="flex items-center gap-1.5 pt-1">
-                        <input
-                          value={newAllocName}
-                          onChange={(e) => setNewAllocName(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && addSuballoc()}
-                          placeholder="Label (e.g. Investing)"
-                          className="flex-1 min-w-0 bg-slate-700/60 border border-slate-600/60 rounded px-2 py-1 text-slate-300 text-xs placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                        />
-                        <input
-                          type="number" min="0" max="100" step="0.1"
-                          value={newAllocPct}
-                          onChange={(e) => setNewAllocPct(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && addSuballoc()}
-                          placeholder="%"
-                          className="w-14 bg-slate-700/60 border border-slate-600/60 rounded px-2 py-1 text-slate-300 text-xs text-center placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                        />
-                        <button
-                          onClick={addSuballoc}
-                          disabled={!newAllocName.trim() || !newAllocPct}
-                          className="px-2 py-1 text-xs rounded bg-emerald-700/60 text-emerald-300 hover:bg-emerald-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-semibold shrink-0"
-                        >
-                          + Add
-                        </button>
+                            {monthlyIncome > 0 && (
+                              <div className="mt-0.5 h-1 bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-500 opacity-60"
+                                  style={{ width: `${Math.min((actual / ((a.pct / 100) * monthlyIncome)) * 100, 100)}%`, backgroundColor: meta.color }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
+                    ))}
+
+                    {subAllocsFor(b).length > 0 && !suballocValidFor(b) && (
+                      <p className="text-amber-400 text-[10px]">
+                        Sub-totals add to {suballocTotalFor(b).toFixed(1)}% — should equal {bucketPct[b]}%
+                      </p>
+                    )}
+                    {subAllocsFor(b).length > 0 && suballocValidFor(b) && (
+                      <p className={`text-[10px] ${meta.text} opacity-60`}>✓ {suballocTotalFor(b).toFixed(1)}% allocated</p>
+                    )}
+
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <input
+                        value={newAllocName[b]}
+                        onChange={(e) => setNewAllocName((prev) => ({ ...prev, [b]: e.target.value }))}
+                        onKeyDown={(e) => e.key === 'Enter' && addSuballoc(b)}
+                        placeholder={`Label (e.g. ${b === 'needs' ? 'Rent' : b === 'wants' ? 'Dining' : 'Investing'})`}
+                        className="flex-1 min-w-0 bg-slate-700/60 border border-slate-600/60 rounded px-2 py-1 text-slate-300 text-xs placeholder-slate-600 focus:outline-none"
+                      />
+                      <input
+                        type="number" min="0" max="100" step="0.1"
+                        value={newAllocPct[b]}
+                        onChange={(e) => setNewAllocPct((prev) => ({ ...prev, [b]: e.target.value }))}
+                        onKeyDown={(e) => e.key === 'Enter' && addSuballoc(b)}
+                        placeholder="%"
+                        className="w-14 bg-slate-700/60 border border-slate-600/60 rounded px-2 py-1 text-slate-300 text-xs text-center placeholder-slate-600 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => addSuballoc(b)}
+                        disabled={!newAllocName[b].trim() || !newAllocPct[b]}
+                        className="px-2 py-1 text-xs rounded disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-semibold shrink-0 text-slate-900"
+                        style={{ backgroundColor: meta.color }}
+                      >
+                        + Add
+                      </button>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
           )
         })}

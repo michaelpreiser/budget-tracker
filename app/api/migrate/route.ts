@@ -103,17 +103,25 @@ export async function POST() {
   })
   steps.push('user_settings seeded')
 
-  // 6. Savings sub-allocations table
+  // 6. Bucket sub-allocations table (needs/wants/savings breakdowns)
   await db.execute({
     sql: `CREATE TABLE IF NOT EXISTS savings_suballocations (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id    INTEGER NOT NULL,
       name       TEXT    NOT NULL,
       pct        REAL    NOT NULL DEFAULT 0,
-      sort_order INTEGER DEFAULT 0
+      sort_order INTEGER DEFAULT 0,
+      bucket     TEXT    NOT NULL DEFAULT 'savings'
     )`,
     args: [],
   })
+  // Add bucket column if table existed before this migration
+  try {
+    await db.execute({ sql: "ALTER TABLE savings_suballocations ADD COLUMN bucket TEXT NOT NULL DEFAULT 'savings'", args: [] })
+    steps.push('Added bucket column to savings_suballocations')
+  } catch {
+    steps.push('savings_suballocations bucket column already exists — skipped')
+  }
   steps.push('savings_suballocations table ready')
 
   return NextResponse.json({ ok: true, steps })
