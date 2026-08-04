@@ -393,7 +393,7 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
                               <div className="mt-0.5 h-1 bg-slate-700 rounded-full overflow-hidden">
                                 <div
                                   className="h-full rounded-full transition-all duration-500 opacity-60"
-                                  style={{ width: `${Math.min((actual / ((a.pct / 100) * monthlyIncome)) * 100, 100)}%`, backgroundColor: meta.color }}
+                                  style={{ width: `${bucketPct[b] > 0 ? Math.min((actual * (a.pct / bucketPct[b])) / ((a.pct / 100) * monthlyIncome) * 100, 100) : 0}%`, backgroundColor: meta.color }}
                                 />
                               </div>
                             )}
