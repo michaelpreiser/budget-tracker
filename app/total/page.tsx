@@ -274,7 +274,7 @@ export default function TotalPage() {
               <div className="bg-slate-900 border border-slate-700/50 rounded-2xl px-5 py-4 shadow-xl">
                 <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">Savings</p>
                 <p className="text-2xl font-bold tabular-nums leading-none text-blue-400">
-                  ⇑${fmt(totalSavings)}
+                  ${fmt(totalSavings)}
                 </p>
                 {totalIncome > 0 && (
                   <p className="text-slate-600 text-xs mt-1.5 tabular-nums">
@@ -332,7 +332,7 @@ export default function TotalPage() {
                             {expenses > 0 ? `−$${fmt(expenses)}` : '—'}
                           </td>
                           <td className="px-5 py-3 text-right tabular-nums text-blue-400">
-                            {savings > 0 ? `⇑$${fmt(savings)}` : '—'}
+                            {savings > 0 ? `$${fmt(savings)}` : '—'}
                           </td>
                           <td className={`px-5 py-3 text-right tabular-nums font-medium ${
                             !hasData ? 'text-slate-500' : mNet >= 0 ? 'text-emerald-400' : 'text-red-400'
@@ -348,7 +348,7 @@ export default function TotalPage() {
                       <td className="px-5 py-3 text-slate-300 font-semibold">Total</td>
                       <td className="px-5 py-3 text-right tabular-nums text-emerald-400 font-semibold">${fmt(adjustedIncome)}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-red-400 font-semibold">−${fmt(adjustedExpenses)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-blue-400 font-semibold">⇑${fmt(totalSavings)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-blue-400 font-semibold">${fmt(totalSavings)}</td>
                       <td className={`px-5 py-3 text-right tabular-nums font-semibold ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
                         {isProfit ? '+' : '−'}${fmt(Math.abs(net))}
                       </td>
@@ -491,7 +491,7 @@ export default function TotalPage() {
                             </span>
                             <div className="flex items-baseline gap-1.5 flex-shrink-0">
                               <span className="text-sm font-medium tabular-nums text-blue-400">
-                                ⇑${fmt(amt)}
+                                ${fmt(amt)}
                               </span>
                               <span className="text-slate-600 text-xs tabular-nums">{pct.toFixed(0)}%</span>
                             </div>
@@ -508,7 +508,7 @@ export default function TotalPage() {
                                 <div key={t.id} className="flex items-center gap-3 px-3 py-2 text-xs">
                                   <span className="text-slate-500 w-[72px] flex-shrink-0 tabular-nums">{t.date}</span>
                                   <span className="flex-1 text-slate-400 truncate">{t.notes || '—'}</span>
-                                  <span className="text-blue-400 tabular-nums font-medium flex-shrink-0">⇑${fmt(t.amount)}</span>
+                                  <span className="text-blue-400 tabular-nums font-medium flex-shrink-0">${fmt(t.amount)}</span>
                                 </div>
                               ))}
                             </div>

@@ -332,7 +332,7 @@ export default function InsightsPage() {
                       {pct.toFixed(0)}%
                     </span>
                     <span className="text-blue-400 text-sm font-medium tabular-nums w-24 text-right">
-                      ⇑${fmt(value)}
+                      ${fmt(value)}
                     </span>
                   </div>
                 )
