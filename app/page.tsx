@@ -509,7 +509,7 @@ export default function Home() {
                 <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${includeSavingsInDiscretionary ? 'translate-x-5' : 'translate-x-1'}`} />
               </button>
             </div>
-            <p className="text-2xl font-bold tabular-nums leading-none text-blue-400">⇑${fmt(savingsDisplay)}</p>
+            <p className="text-2xl font-bold tabular-nums leading-none text-blue-400">${fmt(savingsDisplay)}</p>
             <p className="text-slate-600 text-xs mt-1.5">
               {includeSavingsInDiscretionary ? 'Deducted from discretionary' : 'Not deducted from discretionary'}
             </p>
