@@ -181,6 +181,7 @@ interface CSVTransaction {
   description: string
   amount: number
   type: 'income' | 'expense'
+  isNegative: boolean
 }
 
 // Pure row builder — given a detected colMap and the start row
@@ -195,10 +196,12 @@ function buildTransactions(grid: string[][], startIdx: number, colMap: ColMap): 
 
     let amount: number
     let type: 'income' | 'expense'
+    let isNegative = false
 
     if (colMap.amount !== undefined) {
       amount = parseAmount(row[colMap.amount] ?? '')
       if (isNaN(amount) || amount === 0) continue
+      isNegative = amount < 0
       type = amount > 0 ? 'income' : 'expense'
       amount = Math.abs(amount)
     } else {
@@ -211,7 +214,7 @@ function buildTransactions(grid: string[][], startIdx: number, colMap: ColMap): 
       else { amount = Math.abs(debit); type = 'expense' }
     }
 
-    results.push({ date, description: rawDesc, amount, type })
+    results.push({ date, description: rawDesc, amount, type, isNegative })
   }
   return results
 }
@@ -288,11 +291,14 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
         const isSavingsCategory = category === 'Savings'
         const inferredType: 'income' | 'expense' | 'savings' =
           isSavingsCategory && t.type === 'expense' ? 'savings' : t.type
+        // Preserve negative sign for savings withdrawals: if the original CSV amount was
+        // negative (debit) and the row resolved to savings, treat it as a withdrawal
+        const finalAmount = inferredType === 'savings' && t.isNegative ? -t.amount : t.amount
         return {
           id: nextId++,
           date: t.date,
           description: t.description,
-          amount: t.amount,
+          amount: finalAmount,
           type: inferredType,
           category,
           bucket_id: null,

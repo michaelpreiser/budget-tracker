@@ -29,7 +29,9 @@ export default function SavingsBuckets({ transactions, lastMonthTransactions, mo
 
   const savTx = transactions.filter((t) => t.type === 'savings')
   const lastSavTx = lastMonthTransactions.filter((t) => t.type === 'savings')
-  const totalThisMonth = savTx.reduce((s, t) => s + t.amount, 0)
+  const totalContributed = savTx.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0)
+  const totalWithdrawn = savTx.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0)
+  const totalThisMonth = totalContributed - totalWithdrawn
   const totalLastMonth = lastSavTx.reduce((s, t) => s + t.amount, 0)
   const savingsRate = monthlyIncome > 0 ? (totalThisMonth / monthlyIncome) * 100 : 0
 
@@ -112,22 +114,36 @@ export default function SavingsBuckets({ transactions, lastMonthTransactions, mo
       </div>
 
       {/* Savings rate summary bar */}
-      {(totalThisMonth > 0 || totalLastMonth > 0) && (
+      {(savTx.length > 0 || lastSavTx.length > 0) && (
         <div className="mt-3 mb-4 flex flex-wrap gap-5 p-3 bg-emerald-950/30 border border-emerald-800/30 rounded-xl">
           <div>
-            <p className="text-slate-500 text-xs">Saved this month</p>
-            <p className="text-emerald-400 font-bold tabular-nums text-lg">${fmt(totalThisMonth)}</p>
+            <p className="text-slate-500 text-xs">Contributed</p>
+            <p className="text-emerald-400 font-bold tabular-nums text-lg">+${fmt(totalContributed)}</p>
           </div>
-          {totalLastMonth > 0 && (
+          {totalWithdrawn > 0 && (
+            <div>
+              <p className="text-slate-500 text-xs">Withdrawn</p>
+              <p className="text-red-400 font-bold tabular-nums text-lg">−${fmt(totalWithdrawn)}</p>
+            </div>
+          )}
+          <div>
+            <p className="text-slate-500 text-xs">Net saved</p>
+            <p className={`font-bold tabular-nums text-lg ${totalThisMonth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {totalThisMonth >= 0 ? '+' : '−'}${fmt(Math.abs(totalThisMonth))}
+            </p>
+          </div>
+          {totalLastMonth !== 0 && (
             <div>
               <p className="text-slate-500 text-xs">Last month</p>
-              <p className="text-slate-300 font-semibold tabular-nums">${fmt(totalLastMonth)}</p>
+              <p className={`font-semibold tabular-nums ${totalLastMonth >= 0 ? 'text-slate-300' : 'text-red-400'}`}>
+                {totalLastMonth >= 0 ? '' : '−'}${fmt(Math.abs(totalLastMonth))}
+              </p>
             </div>
           )}
           {monthlyIncome > 0 && (
             <div>
               <p className="text-slate-500 text-xs">Savings rate</p>
-              <p className={`font-bold text-lg tabular-nums ${savingsRate >= 20 ? 'text-emerald-400' : savingsRate >= 10 ? 'text-amber-400' : 'text-slate-400'}`}>
+              <p className={`font-bold text-lg tabular-nums ${savingsRate >= 20 ? 'text-emerald-400' : savingsRate >= 10 ? 'text-amber-400' : savingsRate < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                 {savingsRate.toFixed(1)}%
               </p>
             </div>
@@ -188,9 +204,11 @@ export default function SavingsBuckets({ transactions, lastMonthTransactions, mo
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {buckets.map((b) => {
-            const contributed = savTx.filter((t) => t.bucket_id === b.id).reduce((s, t) => s + t.amount, 0)
+            const bucketContributed = savTx.filter((t) => t.bucket_id === b.id && t.amount > 0).reduce((s, t) => s + t.amount, 0)
+            const bucketWithdrawn = savTx.filter((t) => t.bucket_id === b.id && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0)
+            const bucketNet = bucketContributed - bucketWithdrawn
             const lastContributed = lastSavTx.filter((t) => t.bucket_id === b.id).reduce((s, t) => s + t.amount, 0)
-            const total = b.starting_balance + contributed
+            const total = b.starting_balance + bucketNet
             const goal = b.goal_amount
             const progress = goal && goal > 0 ? Math.min((total / goal) * 100, 100) : null
             const remaining = goal ? Math.max(goal - total, 0) : null
@@ -244,25 +262,34 @@ export default function SavingsBuckets({ transactions, lastMonthTransactions, mo
 
                 <p className="text-slate-200 font-semibold text-sm pr-12 truncate">{b.name}</p>
 
-                <p className="text-2xl font-bold text-emerald-400 tabular-nums mt-1">${fmt(total)}</p>
+                <p className={`text-2xl font-bold tabular-nums mt-1 ${total < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {total < 0 ? '−' : ''}${fmt(Math.abs(total))}
+                </p>
                 {b.starting_balance > 0 && (
                   <p className="text-slate-600 text-xs tabular-nums">
-                    ${fmt(b.starting_balance)} starting + ${fmt(contributed)} added
+                    ${fmt(b.starting_balance)} starting {bucketNet >= 0 ? '+' : '−'} ${fmt(Math.abs(bucketNet))} net
                   </p>
                 )}
 
                 {/* Monthly contributions */}
-                <div className="mt-2 flex gap-4 text-xs">
+                <div className="mt-2 flex flex-wrap gap-4 text-xs">
                   <div>
                     <p className="text-slate-500">This month</p>
-                    <p className={`font-semibold tabular-nums ${contributed > 0 ? 'text-emerald-400' : 'text-slate-600'}`}>
-                      +${fmt(contributed)}
+                    <p className={`font-semibold tabular-nums ${bucketNet > 0 ? 'text-emerald-400' : bucketNet < 0 ? 'text-red-400' : 'text-slate-600'}`}>
+                      {bucketNet >= 0 ? '+' : '−'}${fmt(Math.abs(bucketNet))}
                     </p>
+                    {bucketWithdrawn > 0 && (
+                      <p className="text-[10px] text-slate-500 tabular-nums mt-0.5">
+                        +${fmt(bucketContributed)} − ${fmt(bucketWithdrawn)}
+      </p>
+                    )}
                   </div>
-                  {lastContributed > 0 && (
+                  {lastContributed !== 0 && (
                     <div>
                       <p className="text-slate-500">Last month</p>
-                      <p className="text-slate-400 tabular-nums">+${fmt(lastContributed)}</p>
+                      <p className={`tabular-nums ${lastContributed >= 0 ? 'text-slate-400' : 'text-red-400'}`}>
+                        {lastContributed >= 0 ? '+' : '−'}${fmt(Math.abs(lastContributed))}
+                      </p>
                     </div>
                   )}
                 </div>

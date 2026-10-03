@@ -267,8 +267,9 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
           const actual = actuals[b]
           const target = targets[b]
           const lastActual = lastActuals[b]
-          const progress = target > 0 ? Math.min((actual / target) * 100, 100) : 0
-          const isOver = b !== 'savings' && actual > target && target > 0
+          const rawProgress = target > 0 ? (actual / target) * 100 : 0
+          const progress = Math.min(rawProgress, 100)
+          const isOver = actual > target && target > 0
           const breakdown = b === 'needs' ? catBreakdown.needs : b === 'wants' ? catBreakdown.wants : savBreakdown
 
           return (
@@ -298,10 +299,10 @@ export default function BudgetBuckets({ transactions, lastMonthTransactions, mon
               {target > 0 && (
                 <div className="mt-2 mb-2">
                   <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${progress}%`, backgroundColor: isOver ? '#ef4444' : meta.color }} />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(progress, 0)}%`, backgroundColor: isOver ? '#ef4444' : meta.color }} />
                   </div>
-                  <p className="text-slate-600 text-[10px] mt-0.5 text-right tabular-nums">
-                    {Math.round(progress)}%{isOver && <span className="text-red-400 ml-1">over</span>}
+                  <p className="text-[10px] mt-0.5 text-right tabular-nums">
+                    <span className={isOver ? 'text-amber-400' : 'text-slate-600'}>{Math.round(rawProgress)}%</span>
                   </p>
                 </div>
               )}

@@ -22,6 +22,7 @@ export default function InputBar({ categories, savingsBuckets, onAdd }: Props) {
 
   const [amount, setAmount] = useState('')
   const [type, setType] = useState<TxType>('expense')
+  const [savingsDirection, setSavingsDirection] = useState<'contribution' | 'withdrawal'>('contribution')
   const [category, setCategory] = useState('')
   const [bucketId, setBucketId] = useState<number | ''>('')
   const [notes, setNotes] = useState('')
@@ -36,7 +37,7 @@ export default function InputBar({ categories, savingsBuckets, onAdd }: Props) {
 
   function handleTypeChange(t: TxType) {
     setType(t)
-    if (t !== 'savings') setBucketId('')
+    if (t !== 'savings') { setBucketId(''); setSavingsDirection('contribution') }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -44,7 +45,7 @@ export default function InputBar({ categories, savingsBuckets, onAdd }: Props) {
     if (!amount || !category) return
     setSubmitting(true)
     await onAdd({
-      amount: parseFloat(amount),
+      amount: type === 'savings' && savingsDirection === 'withdrawal' ? -parseFloat(amount) : parseFloat(amount),
       type,
       category,
       notes,
@@ -55,6 +56,7 @@ export default function InputBar({ categories, savingsBuckets, onAdd }: Props) {
     setAmount('')
     setCategory('')
     setBucketId('')
+    setSavingsDirection('contribution')
     setNotes('')
     setDate(today())
   }
@@ -124,6 +126,30 @@ export default function InputBar({ categories, savingsBuckets, onAdd }: Props) {
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
+        )}
+
+        {/* Savings direction toggle */}
+        {type === 'savings' && (
+          <div className="flex rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setSavingsDirection('contribution')}
+              className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                savingsDirection === 'contribution' ? 'bg-emerald-700 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              + Contribution
+            </button>
+            <button
+              type="button"
+              onClick={() => setSavingsDirection('withdrawal')}
+              className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                savingsDirection === 'withdrawal' ? 'bg-red-700 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              − Withdrawal
+            </button>
+          </div>
         )}
 
         {/* Date */}
