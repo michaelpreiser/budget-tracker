@@ -27,6 +27,9 @@ interface Props {
 
 // ─── Auto-categorization ─────────────────────────────────────────────────────
 
+// Credit card payments / transfers — these should be skipped (unchecked) by default
+const CC_PAYMENT_PATTERNS = /\be-?payment\b|autopay|auto pay|payment thank you|online payment|payment received|credit card payment|card payment|bill pay|ach payment|electronic payment/i
+
 const CATEGORY_RULES: Array<[RegExp, string]> = [
   [/payroll|direct dep|salary|wages|dividend|interest earned|tax refund|irs|ssdi|ssi/i, 'Income'],
   [/rent|mortgage|lease|hoa/i, 'Rent/Mortgage'],
@@ -293,6 +296,7 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
     if (!res.ok) throw new Error('Duplicate check failed')
     const checked: (CSVTransaction & { isDuplicate: boolean })[] = await res.json()
 
+    const defaultBucketId = savingsBuckets[0]?.id ?? null
     setRows(
       checked.map((t) => {
         const matchedRule = applyRules(t.description, rules)
@@ -306,6 +310,8 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
         // Preserve negative sign for savings withdrawals: if the original CSV amount was
         // negative (debit) and the row resolved to savings, treat it as a withdrawal
         const finalAmount = inferredType === 'savings' && t.isNegative ? -t.amount : t.amount
+        // CC payments (e.g. "E-PAYMENT DISCO") are money transfers, not real transactions
+        const isCCPayment = CC_PAYMENT_PATTERNS.test(t.description)
         return {
           id: nextId++,
           date: t.date,
@@ -313,9 +319,9 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
           amount: finalAmount,
           type: inferredType,
           category,
-          bucket_id: null,
+          bucket_id: inferredType === 'savings' ? defaultBucketId : null,
           isDuplicate: t.isDuplicate,
-          skip: t.isDuplicate,
+          skip: t.isDuplicate || isCCPayment,
           matchedByRule: !!matchedRule,
         }
       })
@@ -697,24 +703,23 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
                     dupe?
                   </span>
                 )}
-                <button
-                  onClick={() => {
-                    const next: Record<string, 'income' | 'expense' | 'savings'> = { expense: 'savings', savings: 'income', income: 'expense' }
-                    const newType = next[row.type] ?? 'expense'
-                    update(row.id, 'type', newType)
-                    if (newType !== 'savings') update(row.id, 'bucket_id', null)
-                  }}
-                  className={`shrink-0 px-2 py-0.5 rounded-lg font-semibold transition-colors ${
-                    row.type === 'income'
-                      ? 'bg-emerald-900/60 text-emerald-300 hover:bg-emerald-900'
-                      : row.type === 'savings'
-                      ? 'bg-blue-900/60 text-blue-300 hover:bg-blue-900'
-                      : 'bg-red-900/60 text-red-300 hover:bg-red-900'
-                  }`}
-                  title="Click to cycle: Expense → Savings → Income"
-                >
-                  {row.type === 'income' ? '+' : row.type === 'savings' ? '⇑' : '−'}
-                </button>
+                {row.type === 'savings' ? (
+                  <span className="shrink-0 px-2 py-0.5 rounded-lg font-semibold bg-blue-900/60 text-blue-300 text-[10px] whitespace-nowrap">
+                    ⇑ Savings
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => update(row.id, 'type', row.type === 'income' ? 'expense' : 'income')}
+                    className={`shrink-0 px-2 py-0.5 rounded-lg font-semibold transition-colors ${
+                      row.type === 'income'
+                        ? 'bg-emerald-900/60 text-emerald-300 hover:bg-emerald-900'
+                        : 'bg-red-900/60 text-red-300 hover:bg-red-900'
+                    }`}
+                    title="Click to toggle Income / Expense"
+                  >
+                    {row.type === 'income' ? '+' : '−'}
+                  </button>
+                )}
                 <span className={`shrink-0 tabular-nums w-20 text-right font-semibold ${
                   row.type === 'income' ? 'text-emerald-400' :
                   row.type === 'savings' && row.amount < 0 ? 'text-orange-400' :
@@ -735,8 +740,15 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
                     update(row.id, 'category', newCat)
                     update(row.id, 'matchedByRule', false)
                     saveRule(row.description, newCat)
-                    // Auto-switch to savings type when Savings category selected
-                    if (newCat === 'Savings' && row.type === 'expense') update(row.id, 'type', 'savings')
+                    if (newCat === 'Savings') {
+                      // Switching to Savings: lock to savings type and default bucket
+                      if (row.type !== 'savings') update(row.id, 'type', 'savings')
+                      if (!row.bucket_id) update(row.id, 'bucket_id', savingsBuckets[0]?.id ?? null)
+                    } else if (row.type === 'savings') {
+                      // Switching away from Savings: revert to expense, clear bucket
+                      update(row.id, 'type', 'expense')
+                      update(row.id, 'bucket_id', null)
+                    }
                   }}
                   className="shrink-0 bg-slate-700 border border-slate-600 rounded-lg px-1.5 py-0.5 text-slate-200 focus:outline-none focus:border-blue-500 w-32"
                 >
