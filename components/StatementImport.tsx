@@ -307,9 +307,7 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
         const isSavingsCategory = category === 'Savings'
         const inferredType: 'income' | 'expense' | 'savings' =
           isSavingsCategory && t.type === 'expense' ? 'savings' : t.type
-        // Preserve negative sign for savings withdrawals: if the original CSV amount was
-        // negative (debit) and the row resolved to savings, treat it as a withdrawal
-        const finalAmount = inferredType === 'savings' && t.isNegative ? -t.amount : t.amount
+        const finalAmount = t.amount
         // CC payments (e.g. "E-PAYMENT DISCO") are money transfers, not real transactions
         const isCCPayment = CC_PAYMENT_PATTERNS.test(t.description)
         return {
