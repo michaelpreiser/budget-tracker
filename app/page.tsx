@@ -11,6 +11,7 @@ import CategoryManager from '@/components/CategoryManager'
 import StatementImport from '@/components/StatementImport'
 import CategoryRules from '@/components/CategoryRules'
 import AppHeader from '@/components/AppHeader'
+import DuplicateScanner from '@/components/DuplicateScanner'
 import type { Budget, Category, Transaction, SavingsBucket } from '@/types'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -191,6 +192,7 @@ export default function Home() {
   const [includeSavingsInDiscretionary, setIncludeSavingsInDiscretionary] = useState(true)
 
   const [lastMonthTransactions, setLastMonthTransactions] = useState<Transaction[]>([])
+  const [showDuplicateScanner, setShowDuplicateScanner] = useState(false)
 
   // ── Persist exclusions ─────────────────────────────────────────────────────
 
@@ -649,6 +651,7 @@ export default function Home() {
             onDelete={deleteTransaction}
             onEdit={async (id, t) => { await editTransaction(id, t); if (t.type === 'savings') await fetchSavingsBuckets() }}
             onClearAll={clearTransactions}
+            onFindDuplicates={() => setShowDuplicateScanner(true)}
           />
         </div>
 
@@ -667,6 +670,13 @@ export default function Home() {
           Budget Tracker · Data stored in Turso
         </p>
       </main>
+
+      {showDuplicateScanner && (
+        <DuplicateScanner
+          onClose={() => setShowDuplicateScanner(false)}
+          onDeleted={() => { fetchTransactions(); fetchSavingsBuckets() }}
+        />
+      )}
     </div>
   )
 }

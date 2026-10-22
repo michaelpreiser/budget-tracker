@@ -17,6 +17,7 @@ interface Props {
   onDelete: (id: number) => Promise<void>
   onEdit: (id: number, t: Omit<Transaction, 'id'>) => Promise<void>
   onClearAll: () => Promise<void>
+  onFindDuplicates?: () => void
 }
 
 function fmtDate(d: string) {
@@ -26,7 +27,7 @@ function fmtDate(d: string) {
 
 type TxType = 'income' | 'expense' | 'savings'
 
-export default function TransactionLog({ transactions, categories, savingsBuckets, onDelete, onEdit, onClearAll }: Props) {
+export default function TransactionLog({ transactions, categories, savingsBuckets, onDelete, onEdit, onClearAll, onFindDuplicates }: Props) {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
 
@@ -328,17 +329,27 @@ export default function TransactionLog({ transactions, categories, savingsBucket
     <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-5 shadow-xl flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-slate-200 font-semibold text-base">Transaction Log</h2>
-        {transactions.length > 0 && (
-          <button
-            onClick={async () => {
-              if (!confirm('Clear all transactions for this month? This cannot be undone.')) return
-              await onClearAll()
-            }}
-            className="text-xs px-2.5 py-1 rounded-lg border border-red-800/60 text-red-500 hover:text-red-300 hover:border-red-600 hover:bg-red-950/40 transition-colors"
-          >
-            Clear all
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {onFindDuplicates && (
+            <button
+              onClick={onFindDuplicates}
+              className="text-xs px-2.5 py-1 rounded-lg border border-amber-700/50 text-amber-500 hover:text-amber-300 hover:border-amber-500 hover:bg-amber-950/30 transition-colors"
+            >
+              Find Duplicates
+            </button>
+          )}
+          {transactions.length > 0 && (
+            <button
+              onClick={async () => {
+                if (!confirm('Clear all transactions for this month? This cannot be undone.')) return
+                await onClearAll()
+              }}
+              className="text-xs px-2.5 py-1 rounded-lg border border-red-800/60 text-red-500 hover:text-red-300 hover:border-red-600 hover:bg-red-950/40 transition-colors"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
       </div>
 
       {transactions.length === 0 ? (
