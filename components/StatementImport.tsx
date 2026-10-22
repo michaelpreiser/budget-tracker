@@ -93,6 +93,7 @@ interface ColMap {
   amount?: number
   debit?: number
   credit?: number
+  isCreditCard?: boolean
 }
 
 // Header-based detection — tries to match column names
@@ -113,12 +114,15 @@ function detectColumnsByHeader(headers: string[]): ColMap | null {
   const amtIdx = idx(['amount', 'amt', 'transactionamount', 'txnamount'])
   const debIdx = idx(['debit', 'debitamount', 'withdrawal', 'withdrawals', 'charge', 'dr'])
   const creIdx = idx(['credit', 'creditamount', 'deposit', 'deposits', 'cr'])
+  // Credit card CSVs (e.g. Discover) include a bank-assigned "Category" column not present in bank statements
+  const catIdx = idx(['category', 'transactioncategory', 'merchantcategory'])
+  const isCreditCard = catIdx !== -1
 
   if (dateIdx === -1 || descIdx === -1) return null
-  if (amtIdx !== -1) return { date: dateIdx, description: descIdx, amount: amtIdx }
-  if (debIdx !== -1 && creIdx !== -1) return { date: dateIdx, description: descIdx, debit: debIdx, credit: creIdx }
+  if (amtIdx !== -1) return { date: dateIdx, description: descIdx, amount: amtIdx, isCreditCard }
+  if (debIdx !== -1 && creIdx !== -1) return { date: dateIdx, description: descIdx, debit: debIdx, credit: creIdx, isCreditCard }
   // Single debit-only column (charge cards)
-  if (debIdx !== -1) return { date: dateIdx, description: descIdx, amount: debIdx }
+  if (debIdx !== -1) return { date: dateIdx, description: descIdx, amount: debIdx, isCreditCard }
   return null
 }
 
@@ -185,7 +189,7 @@ interface CSVTransaction {
 }
 
 // Pure row builder — given a detected colMap and the start row
-function buildTransactions(grid: string[][], startIdx: number, colMap: ColMap): CSVTransaction[] {
+function buildTransactions(grid: string[][], startIdx: number, colMap: ColMap, isCreditCard = false): CSVTransaction[] {
   const results: CSVTransaction[] = []
   for (let i = startIdx; i < grid.length; i++) {
     const row = grid[i]
@@ -202,7 +206,10 @@ function buildTransactions(grid: string[][], startIdx: number, colMap: ColMap): 
       amount = parseAmount(row[colMap.amount] ?? '')
       if (isNaN(amount) || amount === 0) continue
       isNegative = amount < 0
-      type = amount > 0 ? 'income' : 'expense'
+      // Credit cards (e.g. Discover): positive = charge/expense, negative = credit/income
+      type = isCreditCard
+        ? (amount > 0 ? 'expense' : 'income')
+        : (amount > 0 ? 'income' : 'expense')
       amount = Math.abs(amount)
     } else {
       const debit  = parseAmount(row[colMap.debit!]  ?? '')
@@ -224,18 +231,19 @@ function buildTransactions(grid: string[][], startIdx: number, colMap: ColMap): 
 interface DetectResult {
   colMap: ColMap
   headerIdx: number  // -1 means no header row (data starts at row 0)
+  isCreditCard: boolean
 }
 
 function detectColumns(grid: string[][]): DetectResult | null {
   // 1. Header-based: scan first 10 rows for recognisable column names
   for (let i = 0; i < Math.min(grid.length, 10); i++) {
     const colMap = detectColumnsByHeader(grid[i])
-    if (colMap) return { colMap, headerIdx: i }
+    if (colMap) return { colMap, headerIdx: i, isCreditCard: colMap.isCreditCard ?? false }
   }
 
   // 2. Data-pattern: headerless CSVs (Wells Fargo, etc.)
   const colMap = detectColumnsByData(grid)
-  if (colMap) return { colMap, headerIdx: -1 }
+  if (colMap) return { colMap, headerIdx: -1, isCreditCard: false }
 
   return null
 }
@@ -252,6 +260,10 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [importDone, setImportDone] = useState(false)
   const [rules, setRules] = useState<CategoryRule[]>([])
+
+  // Raw parse state stored so the credit-card override toggle can re-parse without re-uploading
+  const [rawParseState, setRawParseState] = useState<{ grid: string[][], startIdx: number, colMap: ColMap } | null>(null)
+  const [isCreditCard, setIsCreditCard] = useState(false)
 
   // Manual column mapping state (fallback when auto-detect fails)
   const [pendingGrid, setPendingGrid] = useState<string[][] | null>(null)
@@ -320,6 +332,8 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
     setError(null)
     setRows([])
     setPendingGrid(null)
+    setRawParseState(null)
+    setIsCreditCard(false)
     setImportDone(false)
     setLoading(true)
     setLoadingMsg('Parsing CSV…')
@@ -339,8 +353,11 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
         return
       }
 
-      const { colMap, headerIdx } = detected
-      const parsed = buildTransactions(grid, headerIdx + 1, colMap)
+      const { colMap, headerIdx, isCreditCard: detectedCC } = detected
+      const startIdx = headerIdx + 1
+      setIsCreditCard(detectedCC)
+      setRawParseState({ grid, startIdx, colMap })
+      const parsed = buildTransactions(grid, startIdx, colMap, detectedCC)
       await processTransactions(parsed)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to process file')
@@ -600,6 +617,32 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
       {/* ── Preview table ── */}
       {rows.length > 0 && (
         <div className="space-y-3">
+          {/* Credit card / bank statement detection banner */}
+          {rawParseState && (
+            <div className={`flex items-center justify-between px-3 py-2 rounded-xl border text-xs ${
+              isCreditCard
+                ? 'bg-orange-950/40 border-orange-700/40 text-orange-300'
+                : 'bg-slate-800/60 border-slate-700/40 text-slate-400'
+            }`}>
+              <span>
+                {isCreditCard
+                  ? '💳 Credit card detected — positive amounts imported as expenses'
+                  : '🏦 Bank account — positive amounts imported as income'}
+              </span>
+              <button
+                onClick={async () => {
+                  const newFlag = !isCreditCard
+                  setIsCreditCard(newFlag)
+                  const reparsed = buildTransactions(rawParseState.grid, rawParseState.startIdx, rawParseState.colMap, newFlag)
+                  await processTransactions(reparsed)
+                }}
+                className="ml-3 shrink-0 px-2 py-0.5 rounded-lg border border-current opacity-70 hover:opacity-100 transition-opacity"
+              >
+                Switch to {isCreditCard ? 'bank account' : 'credit card'}
+              </button>
+            </div>
+          )}
+
           {/* Toolbar */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -622,7 +665,7 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
               <span className="text-slate-700">|</span>
               <button onClick={() => toggleAll(true)} className="text-slate-400 hover:text-slate-200 transition-colors">Deselect all</button>
               <span className="text-slate-700">|</span>
-              <button onClick={() => { setRows([]); setError(null) }} className="text-red-400 hover:text-red-300 transition-colors">Cancel</button>
+              <button onClick={() => { setRows([]); setError(null); setRawParseState(null); setIsCreditCard(false) }} className="text-red-400 hover:text-red-300 transition-colors">Cancel</button>
             </div>
           </div>
 
@@ -672,8 +715,13 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
                 >
                   {row.type === 'income' ? '+' : row.type === 'savings' ? '⇑' : '−'}
                 </button>
-                <span className={`shrink-0 tabular-nums w-20 text-right font-semibold ${row.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
-                  ${row.amount.toFixed(2)}
+                <span className={`shrink-0 tabular-nums w-20 text-right font-semibold ${
+                  row.type === 'income' ? 'text-emerald-400' :
+                  row.type === 'savings' && row.amount < 0 ? 'text-orange-400' :
+                  row.type === 'savings' ? 'text-blue-400' :
+                  'text-red-400'
+                }`}>
+                  {row.amount < 0 ? '−' : ''}${Math.abs(row.amount).toFixed(2)}
                 </span>
                 {row.matchedByRule && !row.skip && (
                   <span title="Auto-assigned by your saved rules" className="shrink-0 px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 text-[10px] font-semibold">
@@ -716,7 +764,7 @@ export default function StatementImport({ categories, savingsBuckets, onImportDo
           {/* Action bar */}
           <div className="flex gap-2 pt-1">
             <button
-              onClick={() => { setRows([]); setError(null) }}
+              onClick={() => { setRows([]); setError(null); setRawParseState(null); setIsCreditCard(false) }}
               className="px-4 py-2.5 text-sm text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-500 rounded-xl transition-colors"
             >
               Cancel

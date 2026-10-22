@@ -24,8 +24,8 @@ export async function POST(request: NextRequest) {
       transactions.map(async (t) => {
         const result = await db.execute({
           sql: `SELECT COUNT(*) as c FROM transactions
-                WHERE user_id = ? AND date = ? AND ABS(amount - ?) < 0.005 AND type = ?`,
-          args: [user.userId, t.date, t.amount, t.type],
+                WHERE user_id = ? AND date = ? AND ABS(ABS(amount) - ?) < 0.005 AND TRIM(notes) = TRIM(?)`,
+          args: [user.userId, t.date, Math.abs(t.amount), t.description],
         })
         const count = Number(result.rows[0].c)
         return { ...t, isDuplicate: count > 0 }
